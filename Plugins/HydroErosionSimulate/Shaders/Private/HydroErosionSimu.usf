@@ -1,0 +1,54 @@
+#include "/Engine/Public/Platform.ush"
+
+// Vari
+const static float size = 1024;
+const static float deltaTime = 1;	//Temp
+
+// Func
+int Index(uint3 id)
+{
+	return id.x + id.y * size;
+}
+int Index(uint2 id) {
+	return clamp(id.x,1,size-2) + clamp(id.y,1,size-2) * size;
+}
+int Index(uint x, uint y) {
+	return x + y * size;
+}
+
+
+int2 Rain(float2 RainPos ,float2 Id ,float RainAmount)
+{
+	float RainRadius = 20.0f; 
+	float Ramp = 1-saturate(distance(RainPos , Id)- RainRadius);
+	return Ramp * RainAmount;
+}
+
+//		Init Pass
+RWStructuredBuffer<float> WaterHeightBuffer;
+RWStructuredBuffer<float> SedimentBuffer;
+RWStructuredBuffer<float4> OutFluxBuffer;
+RWStructuredBuffer<float2> VelocityBuffr;
+[numthreads(32,32,1)]
+void InitSimuDataCS(uint3 id : SV_DispatchThreadID)
+{
+	int index = Index(id);
+	WaterHeightBuffer[index] = 0;
+	SedimentBuffer[index] = 0;
+	OutFluxBuffer[index] = float4(0,0,0,0);
+	VelocityBuffr[index] = float2(0,0);
+}
+
+
+//		Increase Water Buffer Pass
+float TexSize;
+float RainAmount;
+float2 WaterCenter;
+RWStructuredBuffer<float> WaterHeightW;
+[numthreads(32,32,1)]
+void IncreaseWaterCS(uint3 id : SV_DispatchThreadID)
+{
+	int index = Index(id);
+	float Add_Water = Rain(WaterCenter , id ,RainAmount);
+	WaterHeightW[index] = Add_Water ;
+}
