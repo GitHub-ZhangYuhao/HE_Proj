@@ -2,7 +2,8 @@
 
 // Vari
 const static float size = 1024;
-const static float deltaTime = 1;	//Temp
+const static float deltaTime = 0.01;	//Temp
+const static float Water_Brush_Radius = 0.01;
 
 // Func
 int Index(uint3 id)
@@ -16,12 +17,13 @@ int Index(uint x, uint y) {
 	return x + y * size;
 }
 
-
-int2 Rain(float2 RainPos ,float2 Id ,float RainAmount)
+//Increase Water FUnc
+float Rain(float2 RainPos ,float2 Id ,float RainAmount)
 {
-	float RainRadius = 20.0f; 
-	float Ramp = 1-saturate(distance(RainPos , Id)- RainRadius);
-	return Ramp * RainAmount;
+	float2 UV = Id / size;
+	RainPos = float2(0.5,0.5);
+	float Ramp = 1-saturate((distance(RainPos , UV)*2) - Water_Brush_Radius);
+	return pow(Ramp , 128)*RainAmount;
 }
 
 //		Init Pass
@@ -45,10 +47,69 @@ float TexSize;
 float RainAmount;
 float2 WaterCenter;
 RWStructuredBuffer<float> WaterHeightW;
+StructuredBuffer<float> WaterHeightR;
 [numthreads(32,32,1)]
 void IncreaseWaterCS(uint3 id : SV_DispatchThreadID)
 {
 	int index = Index(id);
 	float Add_Water = Rain(WaterCenter , id ,RainAmount);
-	WaterHeightW[index] = Add_Water ;
+
+	WaterHeightW[index] = WaterHeightR[index] + Add_Water;
+}
+
+
+// OutFlux Calculate
+Texture2D HeightTexture;
+SamplerState HeightTextureSampler;
+StructuredBuffer<float> WaterBufferR;
+StructuredBuffer<float4> OutFluxBufferR;
+RWStructuredBuffer<float4> OutFluxBufferW;
+[numthreads(32,32,1)]
+void OutFluxCS(uint3 id : SV_DispatchThreadID)
+{
+	int index = Index(id);
+	const float A = 1.0f;	//管道横截面积
+	const float g = -9.80f;	//重力加速度
+	const float l = 1.0f;	//虚拟管道长度
+	
+	float2 UV = index / size;
+
+	int2 L = int2(id.x -1 , id.y);
+	int2 R = int2(id.x +1 , id.y);
+	int2 T = int2(id.x ,  id.y+1);
+	int2 B = int2(id.x ,  id.y-1);
+	
+	int3 Sampler_C= int3(id.x, id.y , 0);
+	int3 Sampler_L= int3(L, 0);
+	int3 Sampler_R= int3(R, 0);
+	int3 Sampler_T= int3(T, 0);
+	int3 Sampler_B= int3(B, 0);
+
+	float Cur_BD= HeightTexture.Load(Sampler_C).r - WaterBufferR[Index(id.x , id.y)] ;
+	//Δ H^i t (x,y)
+	float H_L = Cur_BD + HeightTexture.Load(int3(Sampler_L)) - WaterBufferR[Index(L)];		//ΔHL_t = bt(x,y) + d1(x,y) - bt(x-1,y) + d1(x-1,y)
+	float H_R = Cur_BD + HeightTexture.Load(int3(Sampler_R)) - WaterBufferR[Index(R)];	
+	float H_T = Cur_BD + HeightTexture.Load(int3(Sampler_T)) - WaterBufferR[Index(T)];
+	float H_B = Cur_BD + HeightTexture.Load(int3(Sampler_B)) - WaterBufferR[Index(B)];
+
+	//Fi t+Δt(x,y)
+	float F_L = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_L / l);		//FL Δt+t (x,y) = max(0 , FL_t(x,y)) + Δt *A * g* ΔHL_t(x,y) /L)
+	float F_R = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_R / l);	
+	float F_T = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_T / l);
+	float F_B = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_B / l);
+
+	float K =min(1 , WaterBufferR[Index(id.x , id.y)] / ((F_L + F_B + F_R + F_T)*deltaTime) );		//Scale Factor :  K = min(1, d1 * Lx*LY /((FL+FR+FB+FT)*Δt))
+	OutFluxBufferW[index] = float4( F_L , F_R , F_T , F_B ) * K ;
+}
+
+
+//		Debug Pass
+StructuredBuffer<float> InFloatBuffer;
+RWTexture2D<float4> OutTexture;
+[numthreads(32,32,1)]
+void DebugVisulizeCS(uint3 id : SV_DispatchThreadID)
+{
+	int index = Index(id);
+	OutTexture[id.xy]  = float4(InFloatBuffer[index] ,0,0,1);
+	//OutTexture[id.xy]  = float4(1.0,0.0,1.0,1.0);
 }

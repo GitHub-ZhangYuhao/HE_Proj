@@ -46,5 +46,5 @@ public:
 	void InitSimuData_RenderThread(UTextureRenderTarget2D* InRenderTarget);
 
 	UFUNCTION(BlueprintCallable , Category = "HydroSimu")
-	void SimulateHydroErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget ,FVector WaterData);
+	void SimulateHydroErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget , UTextureRenderTarget2D* DebugRenderTarget,FVector WaterData);
 };

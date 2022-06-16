@@ -4,6 +4,7 @@
 #include "HydroErosionSimulateComponent.h"
 
 #include "RenderGraphUtils.h"
+#include "AVEncoder/Private/Microsoft/Windows/ThirdParty/AmdAmf/core/Compute.h"
 #include "Engine/TextureRenderTarget2D.h"
 
 // Sets default values for this component's properties
@@ -74,6 +75,7 @@ public:
 		SHADER_PARAMETER(float ,RainAmount)
 		SHADER_PARAMETER(FVector2D , WaterCenter)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float> , WaterHeightW)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float> , WaterHeightR)
 	END_SHADER_PARAMETER_STRUCT()
 	
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -89,6 +91,56 @@ public:
 };
 IMPLEMENT_GLOBAL_SHADER(FIncreaseWaterCS ,"/Plugins/HydroErosionSimulate/Shaders/Private/HydroErosionSimu.usf" ,"IncreaseWaterCS" , SF_Compute);
 
+class FOutFluxCS : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FOutFluxCS)
+	SHADER_USE_PARAMETER_STRUCT(FOutFluxCS , FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_TEXTURE (Texture2D, HeightTexture)						//b t	(R channel)
+		SHADER_PARAMETER_SAMPLER(SamplerState , HeightTextureSampler)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float> ,WaterBufferR)		//d 1
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,OutFluxBufferR)	//F t
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructureBuffer<float4> , OutFluxBufferW)	//F Δt+t
+	END_SHADER_PARAMETER_STRUCT()
+	
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return RHISupportsComputeShaders(Parameters.Platform);
+	}
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		//OutEnvironment.SetDefine();
+	}
+
+};
+IMPLEMENT_GLOBAL_SHADER(FOutFluxCS ,"/Plugins/HydroErosionSimulate/Shaders/Private/HydroErosionSimu.usf" ,"OutFluxCS" , SF_Compute);
+
+class FDebugVisualizeCS : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FDebugVisualizeCS)
+	SHADER_USE_PARAMETER_STRUCT(FDebugVisualizeCS , FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float> , InFloatBuffer)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4> , OutTexture)
+	END_SHADER_PARAMETER_STRUCT()
+	
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return RHISupportsComputeShaders(Parameters.Platform);
+	}
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		//OutEnvironment.SetDefine();
+	}
+
+};
+IMPLEMENT_GLOBAL_SHADER(FDebugVisualizeCS ,"/Plugins/HydroErosionSimulate/Shaders/Private/HydroErosionSimu.usf" ,"DebugVisulizeCS" , SF_Compute);
 /************************Shaders**************************/
 
 void UHydroErosionSimulateComponent::InitSimuData_RenderThread(UTextureRenderTarget2D* InRenderTarget)
@@ -172,36 +224,44 @@ void UHydroErosionSimulateComponent::InitSimuData_RenderThread(UTextureRenderTar
 	uint32 Test = PooledBuffer_WaterHeight->Desc.BytesPerElement;
 }
 
-void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget , FVector WaterData)
+void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget ,UTextureRenderTarget2D* DebugRenderTarget  , FVector WaterData)
 {
 	check(IsInGameThread());
-
+	
+	//Debug RT
+	FTexture2DRHIRef In_RenderTargetRHI_Result = InRenderTarget->GameThread_GetRenderTargetResource()->GetRenderTargetTexture();
+	FTexture2DRHIRef Debug_RenderTargetRHI_Result = DebugRenderTarget->GameThread_GetRenderTargetResource()->GetRenderTargetTexture();
+	
+	// Buffer Data Init
 	UE_LOG(LogTemp , Warning , TEXT("Current Buffer Initialize : %s") ,  bHasInitBufferData ? TEXT("True") : TEXT("False"));
 	if(bHasInitBufferData == false)
 	{
 		InitSimuData_RenderThread(InRenderTarget);
 		return;
 	}
-
+	
+	
 	//拉起渲染线程
 	ENQUEUE_RENDER_COMMAND(HydroErosionSimulate)
 	(
-	[ &, InRenderTarget](FRHICommandListImmediate &RHICmdList)
+	[ &, InRenderTarget ,In_RenderTargetRHI_Result , Debug_RenderTargetRHI_Result](FRHICommandListImmediate &RHICmdList)
 	{
 		FRDGBuilder GraphBuilder(RHICmdList);
 
 		uint32 BufferElement = InRenderTarget->SizeX * InRenderTarget->SizeY; 
 		FRDGTextureDesc TextureDesc ( FRDGTextureDesc::Create2D (
 					FIntPoint(InRenderTarget->SizeX,InRenderTarget->SizeY),
-					EPixelFormat::PF_R8G8B8A8,
+					In_RenderTargetRHI_Result->GetFormat(),
 					FClearValueBinding::None,
 					TexCreate_UAV | TexCreate_ShaderResource | TexCreate_NoFastClear));
 
+		//BufferData
 		FRDGBufferRef WaterHeight_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_WaterHeight);
+		FRDGBufferRef WaterHeight_Buffer_d1 =  GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float) ,BufferElement) , TEXT("Water_Height_Buffer_d2") ,ERDGBufferFlags::MultiFrame);
 		FRDGBufferRef Sediment_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_Sediment);
 		FRDGBufferRef OutFlux_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_OutFlux);
 		FRDGBufferRef Velocity_Buffer= GraphBuilder.RegisterExternalBuffer(PoolBuffer_Velocity);
-
+	
 		//Global Shader Map  & Dispatch GroupSize
 			const ERHIFeatureLevel::Type FeatureLevel = GMaxRHIFeatureLevel;
 			FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
@@ -213,20 +273,74 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
 			
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
-			PassParameters->WaterHeightW = GraphBuilder.CreateUAV(WaterHeight_Buffer);
+			PassParameters->WaterHeightR = GraphBuilder.CreateSRV(WaterHeight_Buffer);
+			PassParameters->WaterHeightW = GraphBuilder.CreateUAV(WaterHeight_Buffer_d1);
 			PassParameters->TexSize = InRenderTarget->SizeX;
 			PassParameters->WaterCenter = FVector2D(WaterData.X , WaterData.Y);
 			PassParameters->RainAmount = WaterData.Z;
 
 			FComputeShaderUtils::AddPass(
 				GraphBuilder,
-				RDG_EVENT_NAME("Advection_CS_Pass"),
+				RDG_EVENT_NAME("IncreaseWater_Pass"),
 				ComputeShader,PassParameters,
 				FIntVector(GroupSize.X,GroupSize.Y,1));
 			UE_LOG(LogTemp ,Warning , TEXT("Increase Water Pass Done! And Buffer Element is %i") , (int)WaterHeight_Buffer->Desc.NumElements);
 		}
 
+		//OutFlux Pass  Out : F Δt+t (FL , FR , FT , FB)
+		{
+			FRDGBufferRef TempOutFluxBufferOut = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float)*4 ,BufferElement) , TEXT("Water_Height_Buffer_d2") ,ERDGBufferFlags::MultiFrame);
+			
+			typedef FOutFluxCS SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->HeightTexture = In_RenderTargetRHI_Result;			//b t
+			PassParameters->HeightTextureSampler =TStaticSamplerState<SF_Trilinear , AM_Clamp , AM_Clamp , AM_Clamp, AM_Clamp>::GetRHI();
+			PassParameters->WaterBufferR = GraphBuilder.CreateSRV(WaterHeight_Buffer_d1);	//d 1
+			PassParameters->OutFluxBufferR = GraphBuilder.CreateSRV(OutFlux_Buffer);		//F t
+			PassParameters->OutFluxBufferW = GraphBuilder.CreateUAV(TempOutFluxBufferOut);
+
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("OutFlux_Pass"),
+				ComputeShader , PassParameters,
+				FIntVector(GroupSize.X , GroupSize.Y , 1));
+
+			OutFlux_Buffer = TempOutFluxBufferOut;		//应该不能用等号赋值
+			
+			UE_LOG(LogTemp ,Warning , TEXT("OutFlux Pass has been Calculate"));
+		}
+		
+
+		//Debug Pass Resouce
+		FRDGTextureDesc DebugTexDesc = FRDGTextureDesc::Create2D(FIntPoint(InRenderTarget->SizeX , InRenderTarget->SizeY) , Debug_RenderTargetRHI_Result->GetFormat() ,FClearValueBinding::Black ,TexCreate_RenderTargetable | TexCreate_ShaderResource | TexCreate_UAV);
+		FRDGTextureRef DebugTexture = GraphBuilder.CreateTexture(DebugTexDesc ,TEXT("Debug_Texture"));
+		TRefCountPtr<IPooledRenderTarget> Pooled_DebugTexture;
+		//Debug Pass
+		{
+			typedef FDebugVisualizeCS SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+						
+						
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->InFloatBuffer = GraphBuilder.CreateSRV(WaterHeight_Buffer_d1);
+			PassParameters->OutTexture = GraphBuilder.CreateUAV(DebugTexture);
+			
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("Advection_CS_Pass"),
+				ComputeShader,PassParameters,
+				FIntVector(GroupSize.X,GroupSize.Y,1));
+			UE_LOG(LogTemp ,Warning , TEXT("Debug_Pass Is Done"));
+
+			GraphBuilder.QueueTextureExtraction(DebugTexture , &Pooled_DebugTexture);
+		}
+
 		GraphBuilder.Execute();
+
+		//Debug
+		RHICmdList.CopyTexture(Pooled_DebugTexture->GetRenderTargetItem().ShaderResourceTexture ,Debug_RenderTargetRHI_Result->GetTexture2D() ,FRHICopyTextureInfo());
 	});
 }
 
