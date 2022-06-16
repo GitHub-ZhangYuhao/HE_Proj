@@ -93,10 +93,10 @@ void OutFluxCS(uint3 id : SV_DispatchThreadID)
 	float H_B = Cur_BD + HeightTexture.Load(int3(Sampler_B)) - WaterBufferR[Index(B)];
 
 	//Fi t+Δt(x,y)
-	float F_L = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_L / l);		//FL Δt+t (x,y) = max(0 , FL_t(x,y)) + Δt *A * g* ΔHL_t(x,y) /L)
-	float F_R = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_R / l);	
-	float F_T = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_T / l);
-	float F_B = max(0 , OutFluxBuffer[index] + deltaTime * A * g * H_B / l);
+	float F_L = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_L / l);		//FL Δt+t (x,y) = max(0 , FL_t(x,y)) + Δt *A * g* ΔHL_t(x,y) /L)
+	float F_R = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_R / l);	
+	float F_T = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_T / l);
+	float F_B = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_B / l);
 
 	float K =min(1 , WaterBufferR[Index(id.x , id.y)] / ((F_L + F_B + F_R + F_T)*deltaTime) );		//Scale Factor :  K = min(1, d1 * Lx*LY /((FL+FR+FB+FT)*Δt))
 	OutFluxBufferW[index] = float4( F_L , F_R , F_T , F_B ) * K ;

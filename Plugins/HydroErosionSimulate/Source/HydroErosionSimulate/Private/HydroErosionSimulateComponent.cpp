@@ -74,7 +74,7 @@ public:
 		SHADER_PARAMETER(float ,TexSize)
 		SHADER_PARAMETER(float ,RainAmount)
 		SHADER_PARAMETER(FVector2D , WaterCenter)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float> , WaterHeightW)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<FVector4> , WaterHeightW)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float> , WaterHeightR)
 	END_SHADER_PARAMETER_STRUCT()
 	
@@ -101,8 +101,8 @@ public:
 		SHADER_PARAMETER_TEXTURE (Texture2D, HeightTexture)						//b t	(R channel)
 		SHADER_PARAMETER_SAMPLER(SamplerState , HeightTextureSampler)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float> ,WaterBufferR)		//d 1
-		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,OutFluxBufferR)	//F t
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructureBuffer<float4> , OutFluxBufferW)	//F Δt+t
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FVector4> ,OutFluxBufferR)	//F t
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructureBuffer<FVector4> , OutFluxBufferW)	//F Δt+t
 	END_SHADER_PARAMETER_STRUCT()
 	
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -261,7 +261,17 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 		FRDGBufferRef Sediment_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_Sediment);
 		FRDGBufferRef OutFlux_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_OutFlux);
 		FRDGBufferRef Velocity_Buffer= GraphBuilder.RegisterExternalBuffer(PoolBuffer_Velocity);
-	
+
+
+		//Debug
+		{
+			UE_LOG(LogTemp ,Warning , TEXT("Increase Water Pass Buffer Element is %i") , (int)WaterHeight_Buffer->Desc.NumElements);
+			UE_LOG(LogTemp ,Warning , TEXT("OutFlux_Buffer Element is %i") , (int)OutFlux_Buffer->Desc.NumElements);
+			//UE_LOG(LogTemp ,Warning , TEXT("Increase Water Pass Buffer Element is %i") , (int)WaterHeight_Buffer->Desc.NumElements);
+			//UE_LOG(LogTemp ,Warning , TEXT("Increase Water Pass Buffer Element is %i") , (int)WaterHeight_Buffer->Desc.NumElements);
+		}
+		
+		
 		//Global Shader Map  & Dispatch GroupSize
 			const ERHIFeatureLevel::Type FeatureLevel = GMaxRHIFeatureLevel;
 			FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
@@ -273,7 +283,7 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
 			
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
-			PassParameters->WaterHeightR = GraphBuilder.CreateSRV(WaterHeight_Buffer);
+			PassParameters->WaterHeightR = GraphBuilder.CreateSRV(WaterHeight_Buffer ,EPixelFormat::PF_FloatRGBA);
 			PassParameters->WaterHeightW = GraphBuilder.CreateUAV(WaterHeight_Buffer_d1);
 			PassParameters->TexSize = InRenderTarget->SizeX;
 			PassParameters->WaterCenter = FVector2D(WaterData.X , WaterData.Y);
@@ -297,8 +307,8 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
 			PassParameters->HeightTexture = In_RenderTargetRHI_Result;			//b t
 			PassParameters->HeightTextureSampler =TStaticSamplerState<SF_Trilinear , AM_Clamp , AM_Clamp , AM_Clamp, AM_Clamp>::GetRHI();
-			PassParameters->WaterBufferR = GraphBuilder.CreateSRV(WaterHeight_Buffer_d1);	//d 1
-			PassParameters->OutFluxBufferR = GraphBuilder.CreateSRV(OutFlux_Buffer);		//F t
+			PassParameters->WaterBufferR = GraphBuilder.CreateSRV(WaterHeight_Buffer_d1 ,EPixelFormat::PF_FloatRGBA);	//d 1
+			PassParameters->OutFluxBufferR = GraphBuilder.CreateSRV(OutFlux_Buffer ,EPixelFormat::PF_FloatRGBA);		//F t
 			PassParameters->OutFluxBufferW = GraphBuilder.CreateUAV(TempOutFluxBufferOut);
 
 			FComputeShaderUtils::AddPass(
@@ -307,7 +317,7 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 				ComputeShader , PassParameters,
 				FIntVector(GroupSize.X , GroupSize.Y , 1));
 
-			OutFlux_Buffer = TempOutFluxBufferOut;		//应该不能用等号赋值
+			//OutFlux_Buffer = TempOutFluxBufferOut;		//应该不能用等号赋值
 			
 			UE_LOG(LogTemp ,Warning , TEXT("OutFlux Pass has been Calculate"));
 		}
