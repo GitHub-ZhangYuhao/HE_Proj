@@ -64,6 +64,31 @@ public:
 };
 IMPLEMENT_GLOBAL_SHADER(FInitSimuDataCS ,"/Plugins/HydroErosionSimulate/Shaders/Private/HydroErosionSimu.usf" ,"InitSimuDataCS" , SF_Compute);
 
+class FUpdateHightCS : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FUpdateHightCS)
+	SHADER_USE_PARAMETER_STRUCT(FUpdateHightCS , FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_TEXTURE(Texture2D , HeightTextureR)
+		SHADER_PARAMETER_SAMPLER(SamplerState , TexSampler)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4> ,HeightTextureW)
+	END_SHADER_PARAMETER_STRUCT()
+	
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return RHISupportsComputeShaders(Parameters.Platform);
+	}
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		//OutEnvironment.SetDefine();
+	}
+
+};
+IMPLEMENT_GLOBAL_SHADER(FUpdateHightCS ,"/Plugins/HydroErosionSimulate/Shaders/Private/HydroErosionSimu.usf" ,"UpdateHeightTextureCS" , SF_Compute);
+
 class FIncreaseWaterCS : public FGlobalShader
 {
 public:
@@ -98,7 +123,7 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FOutFluxCS , FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_TEXTURE (Texture2D, HeightTexture)						//b t	(R channel)
+		SHADER_PARAMETER_RDG_TEXTURE (Texture2D, HeightTexture)						//b t	(R channel)
 		SHADER_PARAMETER_SAMPLER(SamplerState , HeightTextureSampler)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float> ,WaterBufferR)		//d 1
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FVector4> ,OutFluxBufferR)	//F t
@@ -151,7 +176,7 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FDebugVisualizeCS , FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float> , InFloatBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FVector4> , InFloatBuffer)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4> , OutTexture)
 	END_SHADER_PARAMETER_STRUCT()
 	
@@ -282,10 +307,12 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 					FClearValueBinding::None,
 					TexCreate_UAV | TexCreate_ShaderResource | TexCreate_NoFastClear));
 
+		//HeightTexteure
+		FRDGTextureRef HeightTexture = GraphBuilder.CreateTexture(TextureDesc ,TEXT("TerrainHeightTexture") );
 		//BufferData
 		FRDGBufferRef WaterHeight_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_WaterHeight);
 		FRDGBufferRef WaterHeight_Buffer_d1 =  GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float) ,BufferElement) , TEXT("Water_Height_Buffer_d1") ,ERDGBufferFlags::MultiFrame);
-		FRDGBufferRef WaterHeight_Buffer_d2 =  GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float) ,BufferElement) , TEXT("Water_Height_Buffer_d2") ,ERDGBufferFlags::MultiFrame);
+		//FRDGBufferRef WaterHeight_Buffer_d2 =  GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float) ,BufferElement) , TEXT("Water_Height_Buffer_d2") ,ERDGBufferFlags::MultiFrame);
 		FRDGBufferRef Sediment_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_Sediment);
 		FRDGBufferRef OutFlux_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_OutFlux);
 		FRDGBufferRef Velocity_Buffer= GraphBuilder.RegisterExternalBuffer(PoolBuffer_Velocity);
@@ -305,13 +332,32 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 			FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
 			const FIntVector GroupSize = FComputeShaderUtils::GetGroupCount( FIntPoint(InRenderTarget->SizeX , InRenderTarget->SizeY) , ThreadSize );
 
+
+		//Update Pass
+		{
+			typedef FUpdateHightCS SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+					
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->HeightTextureR = In_RenderTargetRHI_Result;
+			PassParameters->TexSampler = TStaticSamplerState<SF_Trilinear , AM_Clamp , AM_Clamp , AM_Clamp, AM_Clamp>::GetRHI();
+			PassParameters->HeightTextureW = GraphBuilder.CreateUAV(HeightTexture);
+
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("IncreaseWater_Pass"),
+				ComputeShader,PassParameters,
+				FIntVector(GroupSize.X,GroupSize.Y,1));
+			UE_LOG(LogTemp ,Warning , TEXT("Update Height Texture Pass Done!!!"));
+		}
+		
 		//IncreaseWater Pass
 		{
 			typedef FIncreaseWaterCS SHADER;
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
 			
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
-			PassParameters->WaterHeightR = GraphBuilder.CreateSRV(WaterHeight_Buffer);
+			PassParameters->WaterHeightR = GraphBuilder.CreateSRV(WaterHeight_Buffer);	
 			PassParameters->WaterHeightW = GraphBuilder.CreateUAV(WaterHeight_Buffer_d1);
 			PassParameters->TexSize = InRenderTarget->SizeX;
 			PassParameters->WaterCenter = FVector2D(WaterData.X , WaterData.Y);
@@ -333,7 +379,7 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
 
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
-			PassParameters->HeightTexture = In_RenderTargetRHI_Result;			//b t
+			PassParameters->HeightTexture = HeightTexture;			//b t
 			PassParameters->HeightTextureSampler =TStaticSamplerState<SF_Trilinear , AM_Clamp , AM_Clamp , AM_Clamp, AM_Clamp>::GetRHI();
 			PassParameters->WaterBufferR = GraphBuilder.CreateSRV(WaterHeight_Buffer_d1);	//d 1
 			PassParameters->OutFluxBufferR = GraphBuilder.CreateSRV(OutFlux_Buffer );		//F t
@@ -366,6 +412,7 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 				RDG_EVENT_NAME("IncreaseWater_Pass"),
 				ComputeShader,PassParameters,
 				FIntVector(GroupSize.X,GroupSize.Y,1));
+			
 			UE_LOG(LogTemp ,Warning , TEXT("WaterSurfaceVelocityField Pass Is Calculate! "));
 		}
 
@@ -380,7 +427,7 @@ void UHydroErosionSimulateComponent::SimulateHydroErosion_RenderThread(UTextureR
 						
 						
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
-			PassParameters->InFloatBuffer = GraphBuilder.CreateSRV(WaterHeight_Buffer_d1);
+			PassParameters->InFloatBuffer = GraphBuilder.CreateSRV(OutFlux_Buffer);
 			PassParameters->OutTexture = GraphBuilder.CreateUAV(DebugTexture);
 			
 			FComputeShaderUtils::AddPass(

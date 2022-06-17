@@ -41,6 +41,20 @@ void InitSimuDataCS(uint3 id : SV_DispatchThreadID)
 	VelocityBuffr[index] = float2(0,0);
 }
 
+Texture2D  HeightTextureR;
+SamplerState TexSampler;
+RWTexture2D<float4> HeightTextureW;
+[numthreads(32,32,1)]
+void UpdateHeightTextureCS(uint3 id : SV_DispatchThreadID)
+{
+	int index = Index(id);
+	float2 UV = id.xy / size;
+	float HeightRaw = HeightTextureR.Load(int3(id.x , id.y ,0));
+	
+		//这里后面添加修改高度函数
+	
+	HeightTextureW[id.xy] = float4(HeightRaw,0,0,1);
+}
 
 //		Increase Water Buffer Pass
 float TexSize;
@@ -110,17 +124,51 @@ RWStructuredBuffer<float2> VelocityBuffrW;
 [numthreads(32,32,1)]
 void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)
 {
+	#define FL(x,y) OutFluxBufferR[Index(x,y)].r
+	#define FR(x,y) OutFluxBufferR[Index(x,y)].g
+	#define FT(x,y) OutFluxBufferR[Index(x,y)].b
+	#define FB(x,y) OutFluxBufferR[Index(x,y)].a
 	
+	int index = Index(id);
+
+	int2 L = int2(id.x -1 , id.y);
+	int2 R = int2(id.x +1 , id.y);
+	int2 T = int2(id.x ,  id.y+1);
+	int2 B = int2(id.x ,  id.y-1);
+
+	int x = id.x;
+	int y = id.y;
+	
+	//Water Buffer Update
+	//Fi : R,L  G,R  B,T  A,B
+	//Fr(x-1,y) + Fl(x+1 , y) + Ft(x,y-1) + Fb(x ,y+1)
+	//float Sum_InFlux = OutFluxBufferR[Index(L)].g + OutFluxBufferR[Index(R)].r + OutFluxBuffer[Index(T)].a + OutFluxBufferR[Index(B)].b ;
+	float Sum_InFlux = FR(x-1,y) + FL(x+1 , y) + FT(x,y-1) + FB(x ,y+1);
+	//Fr(x,y) + Fl(x,y) + Ft(x,y) + Fb(x,y)
+	//float Sum_OutFlux = OutFluxBufferR[index].r + OutFluxBufferR[index].g + OutFluxBufferR[index].b +OutFluxBufferR[index].a;
+	float Sum_OutFlux = FR(x,y) + FL(x,y) + FT(x,y) + FB(x,y);
+	//ΔV(x,y) = Δt * (Σ Fin - Σ Fout)
+	float delta_V = deltaTime * (Sum_InFlux - Sum_OutFlux);
+	//Update Water Surface
+	float d2 = WaterBufferR[index] + delta_V;	//d2(x,y) = d1(x,y) + ΔV/(lx*ly) 
+	WaterBufferW[index] = d2 ;	//water_Buffer : d2
+
+	//Velocity Buffer Update
+	float delta_WX = (FR(x-1 , y) - FL(x,y) + FR(x,y) - FL(x+1,y)) / 2.0f;
+	float delta_WY = (FT(x , y-1) - FB(x,y) + FT(x,y) - FB(x,y+1)) / 2.0f;
+	float d = (WaterBufferR[index] + d2) / 2.0f;
+	float2 Out_Velocity = float2(delta_WX / d  , delta_WY / d );
+	VelocityBuffrW[index] = Out_Velocity;
 }
 
 
 //		Debug Pass
-StructuredBuffer<float> InFloatBuffer;
+StructuredBuffer<float4> InFloatBuffer;
 RWTexture2D<float4> OutTexture;
 [numthreads(32,32,1)]
 void DebugVisulizeCS(uint3 id : SV_DispatchThreadID)
 {
 	int index = Index(id);
-	OutTexture[id.xy]  = float4(InFloatBuffer[index] ,0,0,1);
+	OutTexture[id.xy]  = float4(InFloatBuffer[index]);
 	//OutTexture[id.xy]  = float4(1.0,0.0,1.0,1.0);
 }
