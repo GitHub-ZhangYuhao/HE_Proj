@@ -191,7 +191,6 @@ public:
 };
 IMPLEMENT_GLOBAL_SHADER(FErosionDepositionCS ,"/Plugins/HydroErosionSimulate/Shaders/Private/HydroErosionSimu.usf" ,"ErosionDepositionCS" , SF_Compute);
 
-
 class FDebugVisualizeCS : public FGlobalShader
 {
 public:
@@ -217,6 +216,13 @@ public:
 };
 IMPLEMENT_GLOBAL_SHADER(FDebugVisualizeCS ,"/Plugins/HydroErosionSimulate/Shaders/Private/HydroErosionSimu.usf" ,"DebugVisulizeCS" , SF_Compute);
 /************************Shaders**************************/
+
+
+
+
+
+
+
 
 void UHydroErosionSimulateComponent::InitSimuData_RenderThread(UTextureRenderTarget2D* InRenderTarget)
 {
