@@ -37,6 +37,7 @@ public:
 
 	bool bHasInitBufferData = false;
 	//TRefCountPtr<IPooledRenderTarget> PooledRenderTarget_TerrainHeight;	//地形高度 :float
+	TRefCountPtr<FRDGPooledBuffer> PoolBuffer_Height;
 	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_WaterHeight;	//水面高度 :float
 	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_Sediment;	//悬浮泥沙量 :float
 	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_OutFlux;		//流出通量	:float4 (Fl,Fr,Ft,Fb)
