@@ -103,6 +103,17 @@ void OutFluxCS(uint3 id : SV_DispatchThreadID)
 }
 
 
+//StructuredBuffer<float4> OutFluxBufferR;
+//StructuredBuffer<float> WaterBufferR;
+RWStructuredBuffer<float> WaterBufferW;
+RWStructuredBuffer<float2> VelocityBuffrW;
+[numthreads(32,32,1)]
+void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)
+{
+	
+}
+
+
 //		Debug Pass
 StructuredBuffer<float> InFloatBuffer;
 RWTexture2D<float4> OutTexture;
