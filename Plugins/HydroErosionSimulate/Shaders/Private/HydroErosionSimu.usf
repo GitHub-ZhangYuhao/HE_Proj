@@ -6,8 +6,9 @@ const static float deltaTime = 0.001;	//Temp
 const static float Water_Brush_Radius = 0.01;
 
 const static float Kc = 1.0f;
-const static float Ks = 0.5f; //0.5f
-const static float Kd = 1.f; //1.0f
+const static float Ks = 0.005f; //0.5f
+const static float Kd = 0.f; //1.0f
+const static float Ke = 0.015f; //0.015
 
 // Func
 int Index(uint3 id)
@@ -193,6 +194,35 @@ void ErosionDepositionCS(uint3 id : SV_DispatchThreadID)
 	}
 }
 
+
+// StructuredBuffer<float> SedimentBufferR;
+// StructuredBuffer<float2>  VelocityBufferR;
+// StructuredBuffer<float>  WaterBufferR;
+// RWStructuredBuffer<float> SedimentBufferW;
+// RWStructuredBuffer<float>  WaterBufferW;
+[numthreads(32,32,1)]
+void SedimentTransEvaporationCS(uint3 id :SV_DispatchThreadID)
+{
+	int index = Index(id.xy);
+	int2 L = int2(id.x -1 , id.y);
+	int2 R = int2(id.x +1 , id.y);
+	int2 T = int2(id.x ,  id.y+1);
+	int2 B = int2(id.x ,  id.y-1);
+	float2 V = VelocityBufferR[index];
+
+	float2 AdvanctCoord = float2(id.x - V.x , id.y - V.y);
+	if(AdvanctCoord.x > size || AdvanctCoord.y > size || AdvanctCoord.x < 0 || AdvanctCoord.y < 0) //在边界外
+	{
+		SedimentBufferW[index] = (SedimentBufferR[Index(L)]
+								+ SedimentBufferR[Index(R)]
+								+ SedimentBufferR[Index(T)]
+								+ SedimentBufferR[Index(B)]) /4.0f;
+	}
+	int AdvectIndex = Index(AdvanctCoord);
+	SedimentBufferW[index] = SedimentBufferR[AdvectIndex];
+
+	WaterBufferW[index] = WaterBufferR[index] * (1.0f - Ke*deltaTime); 
+}
 
 //		Debug Pass
 StructuredBuffer<float2> InFloat2Buffer;
