@@ -35,6 +35,9 @@ public:
 	UPROPERTY(BlueprintReadWrite)
 	int ThreadSize = 32;
 
+	UPROPERTY(BlueprintReadWrite)
+	FVector WaterSimuData = FVector(0.5,0.5,0);
+	
 	bool bHasInitBufferData = false;
 	//TRefCountPtr<IPooledRenderTarget> PooledRenderTarget_TerrainHeight;	//地形高度 :float
 	TRefCountPtr<FRDGPooledBuffer> PoolBuffer_Height;

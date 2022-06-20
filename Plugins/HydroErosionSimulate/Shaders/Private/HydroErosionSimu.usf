@@ -2,8 +2,12 @@
 
 // Vari
 const static float size = 1024;
-const static float deltaTime = 0.01;	//Temp
+const static float deltaTime = 0.001;	//Temp
 const static float Water_Brush_Radius = 0.01;
+
+const static float Kc = 1.0f;
+const static float Ks = 0.5f; //0.5f
+const static float Kd = 1.f; //1.0f
 
 // Func
 int Index(uint3 id)
@@ -20,13 +24,18 @@ int Index(uint x, uint y) {
 //Increase Water FUnc
 float Rain(float2 RainPos ,float2 Id ,float RainAmount)
 {
+	// rain rate
+	float Kr = 0.05;
+	
 	float2 UV = Id / size;
-	RainPos = float2(0.5,0.5);
+	//RainPos = float2(0.5,0.5);
 	float Ramp = 1-saturate((distance(RainPos , UV)*2) - Water_Brush_Radius);
-	return pow(Ramp , 128)*RainAmount;
+	return pow(Ramp , 96)* RainAmount * Kr;
 }
 
 //		Init Pass
+Texture2D InHeight;
+RWStructuredBuffer<float> HeightBuffer;
 RWStructuredBuffer<float> WaterHeightBuffer;
 RWStructuredBuffer<float> SedimentBuffer;
 RWStructuredBuffer<float4> OutFluxBuffer;
@@ -39,6 +48,7 @@ void InitSimuDataCS(uint3 id : SV_DispatchThreadID)
 	SedimentBuffer[index] = 0;
 	OutFluxBuffer[index] = float4(0,0,0,0);
 	VelocityBuffr[index] = float2(0,0);
+	HeightBuffer[index] = InHeight.Load(int3(id.xy,0));
 }
 
 
@@ -77,7 +87,7 @@ void OutFluxCS(uint3 id : SV_DispatchThreadID)
 {
 	int index = Index(id);
 	const float A = 1.0f;	//管道横截面积
-	const float g = -9.80f;	//重力加速度
+	const float g = 9.81f;	//重力加速度
 	const float l = 1.0f;	//虚拟管道长度
 	
 	float2 UV = index / size;
@@ -86,12 +96,6 @@ void OutFluxCS(uint3 id : SV_DispatchThreadID)
 	int2 R = int2(id.x +1 , id.y);
 	int2 T = int2(id.x ,  id.y+1);
 	int2 B = int2(id.x ,  id.y-1);
-	
-	int3 Sampler_C= int3(id.x, id.y , 0);
-	int3 Sampler_L= int3(L, 0);
-	int3 Sampler_R= int3(R, 0);
-	int3 Sampler_T= int3(T, 0);
-	int3 Sampler_B= int3(B, 0);
 
 	float Cur_BD= HeightBufferR[index] + WaterBufferR[index]; //bt(x,y) +d1(x,y)
 	//Δ H^i t (x,y)
@@ -144,7 +148,7 @@ void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)
 	//ΔV(x,y) = Δt * (Σ Fin - Σ Fout)
 	float delta_V = deltaTime * (Sum_InFlux - Sum_OutFlux);
 	//Update Water Surface
-	float d2 = WaterBufferR[index] + delta_V;	//d2(x,y) = d1(x,y) + ΔV/(lx*ly) 
+	float d2 = WaterBufferR[index] + delta_V / 4.0f;	//d2(x,y) = d1(x,y) + ΔV/(lx*ly) 
 	WaterBufferW[index] = d2 ;	//water_Buffer : d2
 
 	//Velocity Buffer Update
@@ -156,22 +160,50 @@ void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)
 }
 
 
+StructuredBuffer<float2>  VelocityBufferR;
+//StructuredBuffer<float>  HeightBufferR;
+StructuredBuffer<float>  SedimentBufferR;
+RWStructuredBuffer<float> SedimentBufferW;
+//RWStructuredBuffer<float> HeightBufferW;
 [numthreads(32,32,1)]
 void ErosionDepositionCS(uint3 id : SV_DispatchThreadID)
 {
-	
+	int index = Index(id.xy);
+	int2 L = int2(id.x -1 , id.y);
+	int2 R = int2(id.x +1 , id.y);
+	int2 T = int2(id.x ,  id.y+1);
+	int2 B = int2(id.x ,  id.y-1);
+	//local tilt angle : b(x-1, y) + b(x+1 ,y) +b(x,y-1) +b(x,y+1) - 4*b(xy);
+	float a = abs(HeightBufferR[Index(L)] + HeightBufferR[Index(R)] + HeightBufferR[Index(T)] + HeightBufferR[Index(B)] - 4*HeightBufferR[index]);	
+	float C_xy = Kc * sin(a) * length(VelocityBufferR[index]);
+
+	if (C_xy > SedimentBufferR[index])	//C > St
+	{
+		//Bt+Δt = Bt - Ks(C - St)
+		HeightBufferW[index] = HeightBufferR[index] - Ks*(C_xy - SedimentBufferR[index]);
+		//S1 = St + Ks(C - St)
+		SedimentBufferW[index] = SedimentBufferR[index] + Ks*(C_xy - SedimentBufferR[index]);
+	}
+	else	//C <= St
+	{
+		//Bt+Δt = Bt + Kd(St - C) 
+		HeightBufferW[index] = HeightBufferR[index] + Kd*( SedimentBufferR[index] - C_xy );
+		//S1 = St -Kd(St - C)
+		SedimentBufferW[index] = SedimentBufferR[index] - Kd*(SedimentBufferR[index] - C_xy );
+	}
 }
 
 
 //		Debug Pass
 StructuredBuffer<float2> InFloat2Buffer;
 StructuredBuffer<float> InFloatBuffer;
+StructuredBuffer<float> InHeightBuffer;
 RWTexture2D<float4> OutTexture;
 [numthreads(32,32,1)]
 void DebugVisulizeCS(uint3 id : SV_DispatchThreadID)
 {
 	int index = Index(id);
 	
-	OutTexture[id.xy]  = float4( (InFloat2Buffer[index].xy+1)/2 , InFloatBuffer[index].r ,1);
+	OutTexture[id.xy]  = float4( (InFloat2Buffer[index].xy+1)/2 , InFloatBuffer[index].r ,InHeightBuffer[index].r);
 	//OutTexture[id.xy]  = float4(1.0,0.0,1.0,1.0);
 }
