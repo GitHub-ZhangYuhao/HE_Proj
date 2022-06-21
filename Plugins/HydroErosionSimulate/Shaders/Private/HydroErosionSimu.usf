@@ -239,7 +239,7 @@ void SedimentTransEvaporationCS(uint3 id :SV_DispatchThreadID)
 	int AdvectIndex = Index(AdvanctCoord);
 	SedimentBufferW[index] = SedimentBufferR[AdvectIndex];
 
-	WaterBufferW[index] = WaterBufferR[index] * (1.0f - Ke*deltaTime); 
+	WaterBufferW[index] = WaterBufferR[index] * (1.0f - Ke * deltaTime); 
 }
 
 
