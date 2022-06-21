@@ -2,13 +2,15 @@
 
 // Vari
 const static float size = 1024;
-const static float deltaTime = 0.001;	//Temp
-const static float Water_Brush_Radius = 0.01;
+const static float deltaTime = 0.005;	//Temp
+const static float Water_Brush_Radius = 0.015;
 
-const static float Kc = 1.0f;
-const static float Ks = 0.005f; //0.5f
-const static float Kd = 0.f; //1.0f
-const static float Ke = 0.015f; //0.015
+const static float Kr = 0.012;		//雨水强度
+const static float Kc = 1.0f;		//输沙能力
+const static float Ks = 0.5f; //0.5f
+const static float Kd = 1.0f; //1.0f
+const static float Ke = 0.015f; //0.015		水蒸发系数
+const static float Kdmax = 1.f;
 
 // Func
 int Index(uint3 id)
@@ -22,16 +24,23 @@ int Index(uint x, uint y) {
 	return x + y * size;
 }
 
+float Lmax(float x)
+{
+	if(x<0)
+		return 0;
+	if(x>Kdmax)
+		return 1;
+	return 1- (Kdmax - x)/Kdmax ;
+}
+
 //Increase Water FUnc
 float Rain(float2 RainPos ,float2 Id ,float RainAmount)
 {
 	// rain rate
-	float Kr = 0.05;
-	
 	float2 UV = Id / size;
 	//RainPos = float2(0.5,0.5);
 	float Ramp = 1-saturate((distance(RainPos , UV)*2) - Water_Brush_Radius);
-	return pow(Ramp , 96)* RainAmount * Kr;
+	return pow(Ramp , 64)* RainAmount * Kr;
 }
 
 //		Init Pass
@@ -45,8 +54,8 @@ RWStructuredBuffer<float2> VelocityBuffr;
 void InitSimuDataCS(uint3 id : SV_DispatchThreadID)
 {
 	int index = Index(id);
-	WaterHeightBuffer[index] = 0;
-	SedimentBuffer[index] = 0;
+	WaterHeightBuffer[index] = 0.00;
+	SedimentBuffer[index] = 0.0f;
 	OutFluxBuffer[index] = float4(0,0,0,0);
 	VelocityBuffr[index] = float2(0,0);
 	HeightBuffer[index] = InHeight.Load(int3(id.xy,0));
@@ -68,7 +77,7 @@ float RainAmount;
 float2 WaterCenter;
 RWStructuredBuffer<float> WaterHeightW;
 StructuredBuffer<float> WaterHeightR;
-[numthreads(32,32,1)]
+[numthreads(32,32,1)]									//In : dt		Out : d1
 void IncreaseWaterCS(uint3 id : SV_DispatchThreadID)
 {
 	int index = Index(id);
@@ -83,12 +92,12 @@ void IncreaseWaterCS(uint3 id : SV_DispatchThreadID)
 StructuredBuffer<float> WaterBufferR;
 StructuredBuffer<float4> OutFluxBufferR;
 RWStructuredBuffer<float4> OutFluxBufferW;
-[numthreads(32,32,1)]
-void OutFluxCS(uint3 id : SV_DispatchThreadID)
+[numthreads(32,32,1)]										//In : Bt	d1	 Ft		//Out: Ft+Δt
+void OutFluxCS(uint3 id : SV_DispatchThreadID)				
 {
 	int index = Index(id);
 	const float A = 1.0f;	//管道横截面积
-	const float g = 9.81f;	//重力加速度
+	const float g = -9.81f;	//重力加速度
 	const float l = 1.0f;	//虚拟管道长度
 	
 	float2 UV = index / size;
@@ -106,10 +115,10 @@ void OutFluxCS(uint3 id : SV_DispatchThreadID)
 	float H_B = Cur_BD - HeightBufferR[Index(B)] - WaterBufferR[Index(B)];
 
 	//Fi t+Δt(x,y)
-	float F_L = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_L / l);		//FL Δt+t (x,y) = max(0 , FL_t(x,y)) + Δt *A * g* ΔHL_t(x,y) /L)
-	float F_R = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_R / l);	
-	float F_T = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_T / l);
-	float F_B = max(0 , OutFluxBufferR[index] + deltaTime * A * g * H_B / l);
+	float F_L = max(0 , OutFluxBufferR[index].r + deltaTime * A * g * H_L / l);		//FL Δt+t (x,y) = max(0 , FL_t(x,y)) + Δt *A * g* ΔHL_t(x,y) /L)
+	float F_R = max(0 , OutFluxBufferR[index].g + deltaTime * A * g * H_R / l);	
+	float F_T = max(0 , OutFluxBufferR[index].b + deltaTime * A * g * H_T / l);
+	float F_B = max(0 , OutFluxBufferR[index].a + deltaTime * A * g * H_B / l);
 
 	float K =min(1 , WaterBufferR[Index(id.x , id.y)] / ((F_L + F_B + F_R + F_T)*deltaTime) );		//Scale Factor :  K = min(1, d1 * Lx*LY /((FL+FR+FB+FT)*Δt))
 	OutFluxBufferW[index] = float4( F_L , F_R , F_T , F_B ) * K ;
@@ -120,8 +129,8 @@ void OutFluxCS(uint3 id : SV_DispatchThreadID)
 //StructuredBuffer<float> WaterBufferR;
 RWStructuredBuffer<float> WaterBufferW;
 RWStructuredBuffer<float2> VelocityBuffrW;
-[numthreads(32,32,1)]
-void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)
+[numthreads(32,32,1)]										//In : Ft+Δt  d1		//Out : d2	Vt+Δt
+void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)	
 {
 	#define FL(x,y) OutFluxBufferR[Index(x,y)].r
 	#define FR(x,y) OutFluxBufferR[Index(x,y)].g
@@ -141,10 +150,8 @@ void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)
 	//Water Buffer Update
 	//Fi : R,L  G,R  B,T  A,B
 	//Fr(x-1,y) + Fl(x+1 , y) + Ft(x,y-1) + Fb(x ,y+1)
-	//float Sum_InFlux = OutFluxBufferR[Index(L)].g + OutFluxBufferR[Index(R)].r + OutFluxBuffer[Index(T)].a + OutFluxBufferR[Index(B)].b ;
 	float Sum_InFlux = FR(x-1,y) + FL(x+1 , y) + FT(x,y-1) + FB(x ,y+1);
 	//Fr(x,y) + Fl(x,y) + Ft(x,y) + Fb(x,y)
-	//float Sum_OutFlux = OutFluxBufferR[index].r + OutFluxBufferR[index].g + OutFluxBufferR[index].b +OutFluxBufferR[index].a;
 	float Sum_OutFlux = FR(x,y) + FL(x,y) + FT(x,y) + FB(x,y);
 	//ΔV(x,y) = Δt * (Σ Fin - Σ Fout)
 	float delta_V = deltaTime * (Sum_InFlux - Sum_OutFlux);
@@ -157,7 +164,7 @@ void UpdateWaterSurfaceAndVelocityFieldCS(uint3 id : SV_DispatchThreadID)
 	float delta_WY = (FT(x , y-1) - FB(x,y) + FT(x,y) - FB(x,y+1)) / 2.0f;
 	float d = (WaterBufferR[index] + d2) / 2.0f;
 	float2 Out_Velocity = float2(delta_WX / d  , delta_WY / d );
-	VelocityBuffrW[index] = Out_Velocity;
+	VelocityBuffrW[index] = normalize(Out_Velocity);
 }
 
 
@@ -166,8 +173,8 @@ StructuredBuffer<float2>  VelocityBufferR;
 StructuredBuffer<float>  SedimentBufferR;
 RWStructuredBuffer<float> SedimentBufferW;
 //RWStructuredBuffer<float> HeightBufferW;
-[numthreads(32,32,1)]
-void ErosionDepositionCS(uint3 id : SV_DispatchThreadID)
+[numthreads(32,32,1)]										//In: d1   St 	Vt+Δt	 //Out: Bt+Δt  S1  
+void ErosionDepositionCS(uint3 id : SV_DispatchThreadID)				 
 {
 	int index = Index(id.xy);
 	int2 L = int2(id.x -1 , id.y);
@@ -175,22 +182,33 @@ void ErosionDepositionCS(uint3 id : SV_DispatchThreadID)
 	int2 T = int2(id.x ,  id.y+1);
 	int2 B = int2(id.x ,  id.y-1);
 	//local tilt angle : b(x-1, y) + b(x+1 ,y) +b(x,y-1) +b(x,y+1) - 4*b(xy);
-	float a = abs(HeightBufferR[Index(L)] + HeightBufferR[Index(R)] + HeightBufferR[Index(T)] + HeightBufferR[Index(B)] - 4*HeightBufferR[index]);	
-	float C_xy = Kc * sin(a) * length(VelocityBufferR[index]);
+	//float a = abs(HeightBufferR[Index(L)] + HeightBufferR[Index(R)] + HeightBufferR[Index(T)] + HeightBufferR[Index(B)] - 4*HeightBufferR[index]);
 
-	if (C_xy > SedimentBufferR[index])	//C > St
+	/*float SinA = dot(float2(-1,0)*HeightBufferR[Index(L)]
+			+ float2(1,0)*HeightBufferR[Index(R)]
+			+ float2(0,1)*HeightBufferR[Index(T)]
+			+ float2(0,-1)*HeightBufferR[Index(B)] , VelocityBufferR[index]);*/
+
+	float3 dhdx = float3(1 ,HeightBufferR[Index(R)] - HeightBufferR[Index(L)] ,0);
+	float3 dhdy = float3(0 ,HeightBufferR[Index(T)] - HeightBufferR[Index(B)] ,1);
+	float3 normal = cross(dhdx ,dhdx);
+	float sinTiltAngle = abs(normal.z)/length(normal);
+	sinTiltAngle = min(0.5 , sinTiltAngle);
+	
+	float C_xy = Kc * sinTiltAngle * length(VelocityBufferR[index]) * Lmax(WaterBufferR[index]);
+	C_xy = saturate(C_xy);
+
+	if (SedimentBufferR[index] < C_xy)
 	{
-		//Bt+Δt = Bt - Ks(C - St)
-		HeightBufferW[index] = HeightBufferR[index] - Ks*(C_xy - SedimentBufferR[index]);
-		//S1 = St + Ks(C - St)
-		SedimentBufferW[index] = SedimentBufferR[index] + Ks*(C_xy - SedimentBufferR[index]);
+		HeightBufferW[index] = HeightBufferR[index] - deltaTime * Ks * (C_xy - SedimentBufferR[index]);
+		SedimentBufferW[index] = SedimentBufferR[index] + deltaTime * Ks *(C_xy - SedimentBufferR[index]);
+		WaterBufferW[index] = WaterBufferR[index] +  deltaTime * Ks *(C_xy - SedimentBufferR[index]);
 	}
-	else	//C <= St
+	else
 	{
-		//Bt+Δt = Bt + Kd(St - C) 
-		HeightBufferW[index] = HeightBufferR[index] + Kd*( SedimentBufferR[index] - C_xy );
-		//S1 = St -Kd(St - C)
-		SedimentBufferW[index] = SedimentBufferR[index] - Kd*(SedimentBufferR[index] - C_xy );
+		HeightBufferW[index] = HeightBufferR[index] + deltaTime * Ks * (C_xy - SedimentBufferR[index]);
+		SedimentBufferW[index] = SedimentBufferR[index] - deltaTime * Ks * (C_xy - SedimentBufferR[index]);
+		WaterBufferW[index] = WaterBufferR[index] - deltaTime * Ks * (C_xy - SedimentBufferR[index]);
 	}
 }
 
@@ -200,8 +218,8 @@ void ErosionDepositionCS(uint3 id : SV_DispatchThreadID)
 // StructuredBuffer<float>  WaterBufferR;
 // RWStructuredBuffer<float> SedimentBufferW;
 // RWStructuredBuffer<float>  WaterBufferW;
-[numthreads(32,32,1)]
-void SedimentTransEvaporationCS(uint3 id :SV_DispatchThreadID)
+[numthreads(32,32,1)]										//In: S1	Vt+Δt	d2		//Out: St+Δt	dt+Δt
+void SedimentTransEvaporationCS(uint3 id :SV_DispatchThreadID)	
 {
 	int index = Index(id.xy);
 	int2 L = int2(id.x -1 , id.y);
@@ -210,7 +228,7 @@ void SedimentTransEvaporationCS(uint3 id :SV_DispatchThreadID)
 	int2 B = int2(id.x ,  id.y-1);
 	float2 V = VelocityBufferR[index];
 
-	float2 AdvanctCoord = float2(id.x - V.x , id.y - V.y);
+	float2 AdvanctCoord =round( float2(id.x - V.x , id.y - V.y) );
 	if(AdvanctCoord.x > size || AdvanctCoord.y > size || AdvanctCoord.x < 0 || AdvanctCoord.y < 0) //在边界外
 	{
 		SedimentBufferW[index] = (SedimentBufferR[Index(L)]
@@ -224,16 +242,30 @@ void SedimentTransEvaporationCS(uint3 id :SV_DispatchThreadID)
 	WaterBufferW[index] = WaterBufferR[index] * (1.0f - Ke*deltaTime); 
 }
 
+
+RWTexture2D<float4> OutTexture;
+[numthreads(32,32,1)]
+void RenderToRTCS(uint3 id :SV_DispatchThreadID)
+{
+	int index = Index(id.xy);
+	float b = HeightBufferR[index];
+	float d = WaterBufferR[index];
+	float s = SedimentBufferR[index];
+	OutTexture[id.xy] = float4(b ,d ,s ,1.0f);
+}
+
+
+
 //		Debug Pass
 StructuredBuffer<float2> InFloat2Buffer;
 StructuredBuffer<float> InFloatBuffer;
 StructuredBuffer<float> InHeightBuffer;
-RWTexture2D<float4> OutTexture;
+//RWTexture2D<float4> OutTexture;
 [numthreads(32,32,1)]
 void DebugVisulizeCS(uint3 id : SV_DispatchThreadID)
 {
 	int index = Index(id);
 	
-	OutTexture[id.xy]  = float4( (InFloat2Buffer[index].xy+1)/2 , InFloatBuffer[index].r ,InHeightBuffer[index].r);
+	OutTexture[id.xy]  = float4( InFloat2Buffer[index].xy , InFloatBuffer[index].r ,InHeightBuffer[index].r);
 	//OutTexture[id.xy]  = float4(1.0,0.0,1.0,1.0);
 }
