@@ -191,7 +191,7 @@ void ErosionDepositionCS(uint3 id : SV_DispatchThreadID)
 
 	float3 dhdx = float3(1 ,HeightBufferR[Index(R)] - HeightBufferR[Index(L)] ,0);
 	float3 dhdy = float3(0 ,HeightBufferR[Index(T)] - HeightBufferR[Index(B)] ,1);
-	float3 normal = cross(dhdx ,dhdx);
+	float3 normal = cross(dhdx ,dhdy);
 	float sinTiltAngle = abs(normal.z)/length(normal);
 	sinTiltAngle = min(0.5 , sinTiltAngle);
 	
@@ -239,7 +239,7 @@ void SedimentTransEvaporationCS(uint3 id :SV_DispatchThreadID)
 	int AdvectIndex = Index(AdvanctCoord);
 	SedimentBufferW[index] = SedimentBufferR[AdvectIndex];
 
-	WaterBufferW[index] = WaterBufferR[index] * (1.0f - Ke * deltaTime); 
+	WaterBufferW[index] = WaterBufferR[index] * (1.0f - Ke*deltaTime); 
 }
 
 
