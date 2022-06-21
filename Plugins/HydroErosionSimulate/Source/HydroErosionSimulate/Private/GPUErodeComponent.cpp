@@ -2,6 +2,7 @@
 
 
 #include "GPUErodeComponent.h"
+#include "GPUEdosionShaders.h"
 
 // Sets default values for this component's properties
 UGPUErodeComponent::UGPUErodeComponent()
@@ -30,5 +31,9 @@ void UGPUErodeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	// ...
+}
+
+void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget)
+{
 }
 

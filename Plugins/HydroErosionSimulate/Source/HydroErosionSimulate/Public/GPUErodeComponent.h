@@ -24,5 +24,7 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-		
+	bool bIsInit = false;
+
+	void InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget);
 };
