@@ -1,0 +1,34 @@
+#include "/Engine/Public/Platform.ush"
+
+float4 SampleBilinear(RWTexture2D<float4> tex, float2 uv)
+{
+	float2 uva = floor(uv);
+	float2 uvb = ceil(uv);
+
+	uint2 id00 = (uint2)uva;  // 0 0
+	uint2 id10 = uint2(uvb.x, uva.y); // 1 0
+	uint2 id01 = uint2(uva.x, uvb.y); // 0 1	
+	uint2 id11 = (uint2)uvb; // 1 1
+
+	float2 d = uv - uva;
+
+	return
+		tex[id00] * (1 - d.x) * (1 - d.y) +
+		tex[id10] * d.x * (1 - d.y) +
+		tex[id01] * (1 - d.x) * d.y +
+		tex[id11] * d.x * d.y;
+}
+
+const static float TexSize = 1024;
+
+
+
+Texture2D InHeightMapTex;
+SamplerState InHeightMapTexSampler;
+RWTexture2D<float4> SimulateTex;
+[numthreads(32,32,1)]
+void InitSimuData(uint3 id :SV_DispatchThreadID)
+{
+	float2 UV = id.xy / TexSize; 
+	SimulateTex[id.xy] = float4(InHeightMapTex.Sample(InHeightMapTexSampler , UV).r ,0,0,0);
+}
