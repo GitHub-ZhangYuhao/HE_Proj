@@ -1,37 +1,21 @@
 #include "/Engine/Public/Platform.ush"
 
 
+
 const static float TexSize = 1024;
 const static float Water_Brush_Radius = 0.025f;
 const static float Kr = 0.25;		//Rain Factor
 
-float4 SampleBilinear(RWTexture2D<float4> tex, float2 uv)
-{
-	float2 uva = floor(uv);
-	float2 uvb = ceil(uv);
 
-	uint2 id00 = (uint2)uva;  // 0 0
-	uint2 id10 = uint2(uvb.x, uva.y); // 1 0
-	uint2 id01 = uint2(uva.x, uvb.y); // 0 1	
-	uint2 id11 = (uint2)uvb; // 1 1
-
-	float2 d = uv - uva;
-
-	return
-		tex[id00] * (1 - d.x) * (1 - d.y) +
-		tex[id10] * d.x * (1 - d.y) +
-		tex[id01] * (1 - d.x) * d.y +
-		tex[id11] * d.x * d.y;
-}
 
 int Index(uint3 id){
-	return id.x + id.y * size;
+	return id.x + id.y * TexSize;
 }
 int Index(uint2 id) {
-	return clamp(id.x,1,size-2) + clamp(id.y,1,size-2) * size;
+	return clamp(id.x,1,TexSize-2) + clamp(id.y,1,TexSize-2) * TexSize;
 }
 int Index(uint x, uint y) {
-	return x + y * size;
+	return x + y * TexSize;
 }
 //Increase Water Func
 float Rain(float2 RainPos ,float2 UV ,float RainAmount)
@@ -57,26 +41,31 @@ SamplerState InHeightMapTexSampler;
 // A : Surface hardness
 RWTexture2D<float4> SimulateTexW;
 // Water Flux Field
-RWStructuredBuffer<float4> FluxBufferW;
+RWStructuredBuffer<float4> FluxW;
 // Velocity Field
 RWStructuredBuffer<float2> VelocityW;
+// Flux Field
+
+
 [numthreads(32,32,1)]
 void InitSimuData(uint3 id :SV_DispatchThreadID)
 {
+	int index = Index(id);
+	
 	float2 UV = id.xy / TexSize; 
-	SimulateTex[id.xy] = float4(InHeightMapTex.Sample(InHeightMapTexSampler , UV).r ,0,0,0);
-	FluxBufferW[id.xy] = float4(0,0,0,0);
-	VelocityW[id.xy] = float2(0,0);
+	SimulateTexW[id.xy] = InHeightMapTex.SampleLevel(InHeightMapTexSampler ,UV, 0);
+	FluxW[index] = float4(0,0,0,0);
+	VelocityW[index] = float2(0,0);
 }
 
-Texture2D  SimulateTexR;
-SamplerState  SimulateTexSampler;
+Texture2D SimulateTexR;
+SamplerState SimulateTexSampler;
 /*StructuredBuffer<float> WaterHeightR;
 StructuredBuffer<float> WaterHeightW;*/
 
 float4 SimulateTex( float2 UV ,float2 Offset = float2(0,0))
 {
-	return SimulateTexR.Sample(SimulateTexSampler , UV + Offset);
+	return SimulateTexR.SampleLevel(SimulateTexSampler, UV, 0);
 }
 
 #define HEIGHT(state) state.r
@@ -89,8 +78,9 @@ void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
 {
 	int index = Index(id);
 	float2 UV = index/TexSize;
-	float4 state =  SimulateTex(UV);
+	float4 state = SimulateTex(UV).rgba;
 	float HeightIncrease = HEIGHT(state) + HeightAdd();
 	float WaterIncrease = WATER(state) + Rain( RainData.xy , UV, RainData.z);
-	SimulateTexW[id.xy] =float4(HeightIncrease , WaterIncrease , state.z , state.w);
+	SimulateTexW[id.xy] = float4(HeightIncrease , WaterIncrease , state.z , state.w);
+
 }

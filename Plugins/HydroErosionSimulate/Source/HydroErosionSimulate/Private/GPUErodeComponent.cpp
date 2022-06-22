@@ -3,6 +3,8 @@
 
 #include "GPUErodeComponent.h"
 #include "GPUEdosionShaders.h"
+#include "RenderGraph.h"
+#include "Engine/TextureRenderTarget2D.h"
 
 // Sets default values for this component's properties
 UGPUErodeComponent::UGPUErodeComponent()
@@ -31,6 +33,76 @@ void UGPUErodeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	// ...
+}
+
+void UGPUErodeComponent::InvokeGPUInitData_RenderThread(UTextureRenderTarget2D* InRenderTarget)
+{
+	
+	if(bIsInit == true)
+	{
+		Pooled_SimulateTexture.SafeRelease();
+		PooledBuffer_Flux.SafeRelease();
+		PooledBuffer_Velocity.SafeRelease();
+	}
+	
+	FTexture2DRHIRef In_RenderTargetRHI_Result = InRenderTarget->GameThread_GetRenderTargetResource()->GetRenderTargetTexture();
+	
+		//拉起渲染线程
+	ENQUEUE_RENDER_COMMAND(HydroErosionSimulate)
+	(
+	[& ,this,In_RenderTargetRHI_Result, InRenderTarget](FRHICommandListImmediate &RHICmdList)
+	{
+		FRDGBuilder GraphBuilder(RHICmdList);
+
+		uint32 BufferElement = InRenderTarget->SizeX * InRenderTarget->SizeY; 
+		FRDGTextureDesc TextureDesc ( FRDGTextureDesc::Create2D (
+					FIntPoint(InRenderTarget->SizeX,InRenderTarget->SizeY),
+					InRenderTarget->GetFormat(),
+					FClearValueBinding::None,
+					TexCreate_UAV | TexCreate_ShaderResource | TexCreate_NoFastClear));
+		//初始化Buffer,Texture
+		FRDGBufferRef Velocity_Buffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float)*2 ,BufferElement) , TEXT("Velocity_Buffer") ,ERDGBufferFlags::MultiFrame);
+		FRDGBufferRef Flux_Buffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float)*4 ,BufferElement) , TEXT("Flux_Buffer") ,ERDGBufferFlags::MultiFrame);
+		FRDGTextureRef SimulateTex = GraphBuilder.CreateTexture(TextureDesc ,TEXT("SimulateTex"));
+		
+		const ERHIFeatureLevel::Type FeatureLevel = GMaxRHIFeatureLevel;
+		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+
+		const FIntVector GroupSize = FComputeShaderUtils::GetGroupCount( FIntPoint(InRenderTarget->SizeX ,InRenderTarget->SizeY) , ThreadSize );
+		
+		//Init Pass
+		{
+			typedef FInitSimuData SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+			
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->InHeightMapTex=In_RenderTargetRHI_Result;
+			PassParameters->InHeightMapTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
+			PassParameters->FluxW = GraphBuilder.CreateUAV(Flux_Buffer);
+			PassParameters->VelocityW = GraphBuilder.CreateUAV(Velocity_Buffer);
+			PassParameters->SimulateTexW = GraphBuilder.CreateUAV(SimulateTex);
+			
+
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("Init_Simu_Data_Pass"),
+				ComputeShader,PassParameters,
+				FIntVector(GroupSize.X,GroupSize.Y,1));
+		}
+		
+		GraphBuilder.QueueTextureExtraction(SimulateTex ,&Pooled_SimulateTexture);
+
+		//转换外部存储
+		ConvertToExternalBuffer(GraphBuilder, Flux_Buffer, PooledBuffer_Flux);
+		ConvertToExternalBuffer(GraphBuilder, Velocity_Buffer , PooledBuffer_Velocity);
+		ConvertToExternalTexture(GraphBuilder,SimulateTex,Pooled_SimulateTexture);
+		GraphBuilder.Execute();
+		
+		RHICmdList.CopyTexture(Pooled_SimulateTexture->GetRenderTargetItem().ShaderResourceTexture,In_RenderTargetRHI_Result->GetTexture2D(),FRHICopyTextureInfo());
+	});
+	
+	bIsInit = true;
+	UE_LOG(LogTemp , Warning ,TEXT("Simulate Data Has Prepeared!!!"));
 }
 
 void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget)

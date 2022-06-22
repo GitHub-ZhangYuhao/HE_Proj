@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "RenderGraphResources.h"
 #include "Components/ActorComponent.h"
 #include "GPUErodeComponent.generated.h"
 
@@ -24,7 +25,15 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	int ThreadSize = 32;
 	bool bIsInit = false;
+	TRefCountPtr<IPooledRenderTarget> Pooled_SimulateTexture;
+	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_Flux;
+	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_Velocity;
 
+	UFUNCTION(BlueprintCallable , Category = "GPUHydroErosion")
+	void InvokeGPUInitData_RenderThread(UTextureRenderTarget2D* InRenderTarget);
+
+	UFUNCTION(BlueprintCallable , Category = "GPUHydroErosion")
 	void InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget);
 };

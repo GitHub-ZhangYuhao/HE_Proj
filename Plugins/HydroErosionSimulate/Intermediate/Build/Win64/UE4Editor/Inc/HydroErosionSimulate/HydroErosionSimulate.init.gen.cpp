@@ -21,7 +21,7 @@ void EmptyLinkFunctionForGeneratedCodeHydroErosionSimulate_init() {}
 				nullptr,
 				0,
 				PKG_CompiledIn | 0x00000000,
-				0x435A6F66,
+				0x8F1D432C,
 				0x7089FD5E,
 				METADATA_PARAMS(nullptr, 0)
 			};
