@@ -25,8 +25,8 @@ public:
 		SHADER_PARAMETER_TEXTURE(Texture2D , InHeightMapTex)
 		SHADER_PARAMETER_SAMPLER(SamplerState , InHeightMapTexSampler)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4> ,SimulateTexW)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float4> , FluxW)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float2> , VelocityW)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<FVector4> , FluxW)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<FVector2f> , VelocityW)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(FGlobalShaderPermutationParameters const& Parameters)
@@ -63,3 +63,27 @@ public:
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FUpdateWaterAndHeightCS, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "UpdateWaterAndHeightCS", SF_Compute);
+
+class FOutFlux:public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FOutFlux)
+	SHADER_USE_PARAMETER_STRUCT(FOutFlux , FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
+		SHADER_PARAMETER_TEXTURE(Texture2D , SimulateTexR)
+		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float4> , FluxW)
+	END_SHADER_PARAMETER_STRUCT()
+	
+	static bool ShouldCompilePermutation(FGlobalShaderPermutationParameters const& Parameters)
+	{
+		return RHISupportsComputeShaders(Parameters.Platform);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		//OutEnvironment.SetDefine();
+	}
+};
+IMPLEMENT_GLOBAL_SHADER(FOutFlux, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "OutFlux", SF_Compute);

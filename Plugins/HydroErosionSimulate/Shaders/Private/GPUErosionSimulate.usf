@@ -44,6 +44,11 @@ float HeightAdd()
 Texture2D InHeightMapTex;
 SamplerState InHeightMapTexSampler;
 
+//R : L
+//G : R
+//B : T
+//A : B
+StructuredBuffer<float4> FluxR;
 // R : height
 // G : water height
 // B : suspended sediment amount
@@ -80,13 +85,21 @@ StructuredBuffer<float> WaterHeightW;*/
 
 float4 SimulateTex( float2 UV ,float2 Offset = float2(0,0))
 {
-	return SimulateTexR.SampleLevel(SimulateTexSampler, UV, 0);
+	return SimulateTexR.SampleLevel(SimulateTexSampler, UV + Offset, 0);
 }
 
 #define HEIGHT(state) state.r
 #define WATER(state) state.g
 #define SEDIMENT(state) state.b
 #define HARDNESS(state) state.a
+#define FULL_HEIGHT(state) HEIGHT(state)+WATER(STATE)
+
+#define LDIR(OutFlux) OutFlux.r;
+#define RDIR(OutFlux) OutFlux.g;
+#define TDIR(OutFlux) OutFlux.b;
+#define BDIR(OutFlux) OutFlux.a;
+
+
 float3 RainData;
 [numthreads(32,32,1)]
 void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
@@ -99,4 +112,49 @@ void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
 	float WaterIncrease = WATER(state) + Rain( RainData.xy , UV, RainData.z);
 	SimulateTexW[id.xy] = float4(HeightIncrease , WaterIncrease , state.z , state.w);
 	//SimulateTexW[id.xy] = state;
+}
+
+const static float2 L = float2(-1,0);
+const static float2 R = float2(1,0);
+const static float2 T = float2(0,1);
+const static float2 B = float2(0,-1);
+	
+const static float2 L_Bias = L/TexSize;
+const static float2 R_Bias = R/TexSize;
+const static float2 T_Bias = T/TexSize;
+const static float2 B_Bias = B/TexSize;
+
+const static float PipeLength = 1.0f/TexSize;
+const static float deltaTime = 0.01f;
+const static float Gravity = 9.81f;
+const static float PipeArea = 20.0f;
+[numthreads(32,32,1)]
+void OutFlux(uint3 id:SV_DispatchThreadID)
+{
+	int index = Index(id.xy);
+	
+	float2 UV = (id.xy+0.5) / TexSize;
+	float4 State = SimulateTex(UV );
+	float4 L_State = SimulateTex(UV, L_Bias);
+	float4 R_State = SimulateTex(UV, R_Bias);
+	float4 T_State = SimulateTex(UV, T_Bias);
+	float4 B_State = SimulateTex(UV, B_Bias);
+
+	float Terrain_Height = HEIGHT(State);
+	float Water_Height = WATER(State);
+	
+	float4 Cur_OutFlux = FluxR[index];
+
+	float4 Full_Height_diff = float4(FULL_HEIGHT(State)) - float4(FULL_HEIGHT(L_State) ,
+															 	  FULL_HEIGHT(R_State),
+																  FULL_HEIGHT(T_State),
+															 	  FULL_HEIGHT(B_State));
+	float OutFlux = max(0 , Cur_OutFlux + deltaTime * Gravity * PipeArea * Full_Height_diff / PipeLength);
+
+	if (id.x == 0)  OutFlux.r = 0.0f;
+	if (id.y == 0)	OutFlux.a = 0;
+	if (id.x == TexSize - 1) OutFlux.g = 0;
+	if (id.y == TexSize - 1) OutFlux.b = 0;	
+
+	/***** K *************/
 }
