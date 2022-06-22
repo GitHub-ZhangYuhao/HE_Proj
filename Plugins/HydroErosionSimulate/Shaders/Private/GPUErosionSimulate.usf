@@ -17,16 +17,25 @@ int Index(uint2 id) {
 int Index(uint x, uint y) {
 	return x + y * TexSize;
 }
+
+float2 GetUV(RWTexture2D<float4> Tex ,int3 id)
+{
+	float sizeX, sizeY;
+	Tex.GetDimensions(sizeX, sizeY);
+	float2 iResolution = float2(sizeX,sizeY);
+	return (id.xy+0.5) / iResolution;
+}
 //Increase Water Func
 float Rain(float2 RainPos ,float2 UV ,float RainAmount)
 {
+	//return 0.1f;
 	//RainPos = float2(0.5,0.5);
 	float Ramp = 1-saturate((distance(RainPos , UV)*2) - Water_Brush_Radius);
-	return pow(Ramp , 64)* RainAmount * Kr;
+	return saturate(pow(Ramp , 64))* RainAmount * Kr;
 }
 float HeightAdd()
 {
-	return 0;
+	return 0.f;
 }
 
 
@@ -51,9 +60,15 @@ RWStructuredBuffer<float2> VelocityW;
 void InitSimuData(uint3 id :SV_DispatchThreadID)
 {
 	int index = Index(id);
-	
+
+	float Init_RainInit_Rain = 0.05;
+	float Init_Sediment = 0;
+	float Init_Hardness = 0;
 	float2 UV = id.xy / TexSize; 
-	SimulateTexW[id.xy] = InHeightMapTex.SampleLevel(InHeightMapTexSampler ,UV, 0);
+	SimulateTexW[id.xy] =float4(InHeightMapTex.SampleLevel(InHeightMapTexSampler ,UV, 0).r,
+										Init_RainInit_Rain,
+										Init_Sediment,
+										Init_Hardness);
 	FluxW[index] = float4(0,0,0,0);
 	VelocityW[index] = float2(0,0);
 }
@@ -76,11 +91,12 @@ float3 RainData;
 [numthreads(32,32,1)]
 void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
 {
-	int index = Index(id);
-	float2 UV = index/TexSize;
+	int index = Index(id.xy);
+	
+	float2 UV = GetUV(SimulateTexW , id);
 	float4 state = SimulateTex(UV).rgba;
 	float HeightIncrease = HEIGHT(state) + HeightAdd();
 	float WaterIncrease = WATER(state) + Rain( RainData.xy , UV, RainData.z);
 	SimulateTexW[id.xy] = float4(HeightIncrease , WaterIncrease , state.z , state.w);
-
+	//SimulateTexW[id.xy] = state;
 }

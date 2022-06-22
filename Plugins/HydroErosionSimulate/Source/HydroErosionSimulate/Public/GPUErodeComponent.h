@@ -26,8 +26,13 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	int ThreadSize = 32;
+	int SimulationTimes = 0;
 	bool bIsInit = false;
-	TRefCountPtr<IPooledRenderTarget> Pooled_SimulateTexture;
+
+	//SimulateData
+	UPROPERTY(BlueprintReadWrite)
+	FVector RainData;
+	
 	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_Flux;
 	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_Velocity;
 
