@@ -136,6 +136,8 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 		const FIntVector GroupSize = FComputeShaderUtils::GetGroupCount( FIntPoint(InRenderTarget->SizeX ,InRenderTarget->SizeY) , ThreadSize );
 		
 		//Add Height Water Pass
+		//	In : Tex(height ,water ,sediment ,hardness)
+		//	Out: Tex(height ,water ,sediment ,hardness)
 		{
 			typedef FUpdateWaterAndHeightCS SHADER;
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
