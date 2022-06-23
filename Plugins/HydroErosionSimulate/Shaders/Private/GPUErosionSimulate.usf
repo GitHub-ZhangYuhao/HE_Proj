@@ -166,3 +166,9 @@ void OutFluxComputeCS(uint3 id:SV_DispatchThreadID)
 	FluxW[index] = max(0, K*OutFlux);
 	DebugTex[id.xy] =  frac(max(0 ,OutFlux));
 }
+
+[numthreads(32,32,1)]
+void VelocityComputeCS(uint3 id:SV_DispatchThreadID)
+{
+	//DebugTex[id.xy] = FluxR[Index(id.xy)];
+}	

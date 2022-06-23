@@ -181,6 +181,24 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 				FIntVector(GroupSize.X,GroupSize.Y,1));
 		}
 		
+		
+		{
+			typedef FVelocityComputeCS SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+								
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->SimulateTexR = In_RenderTargetRHI_Result;
+			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
+			PassParameters->FluxR = GraphBuilder.CreateSRV(Flux_Buffer);
+			PassParameters->DebugTex = GraphBuilder.CreateUAV(DebugTex);
+					
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("Velocityes_Pass"),
+				ComputeShader,PassParameters,
+				FIntVector(GroupSize.X,GroupSize.Y,1));
+		}
+		
 
 		//拷贝到RT
 		TRefCountPtr<IPooledRenderTarget> Pooled_SimulateTexture = nullptr;
@@ -190,7 +208,7 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 		GraphBuilder.QueueTextureExtraction(DebugTex ,&Pooled_DebugTexture);
 
 		//转换外部存储
-		ConvertToExternalBuffer(GraphBuilder, Flux_Buffer, PooledBuffer_Flux);
+		ConvertToExternalBuffer(GraphBuilder, Flux_Buffer_1, PooledBuffer_Flux);
 		ConvertToExternalBuffer(GraphBuilder, Velocity_Buffer , PooledBuffer_Velocity);
 		// ConvertToExternalTexture(GraphBuilder,SimulateTex,Pooled_SimulateTexture);
 		GraphBuilder.Execute();

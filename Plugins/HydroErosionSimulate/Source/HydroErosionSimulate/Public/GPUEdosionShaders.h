@@ -88,3 +88,27 @@ public:
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FOutFluxComputeCS, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "OutFluxComputeCS", SF_Compute);
+
+class FVelocityComputeCS:public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FVelocityComputeCS)
+	SHADER_USE_PARAMETER_STRUCT(FVelocityComputeCS , FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
+		SHADER_PARAMETER_TEXTURE(Texture2D , SimulateTexR)
+		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
+	END_SHADER_PARAMETER_STRUCT()
+	
+	static bool ShouldCompilePermutation(FGlobalShaderPermutationParameters const& Parameters)
+	{
+		return RHISupportsComputeShaders(Parameters.Platform);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		//OutEnvironment.SetDefine();
+	}
+};
+IMPLEMENT_GLOBAL_SHADER(FVelocityComputeCS, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "VelocityComputeCS", SF_Compute);
