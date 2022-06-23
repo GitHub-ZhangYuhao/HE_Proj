@@ -2,14 +2,14 @@
 	"RemapUnityFiles": 
 	{
 		"Module.HydroErosionSimulate.cpp.obj": [
+			"GPUErodeComponent.cpp.obj",
 			"HydroErosionSimulate.cpp.obj",
-			"HydroErosionSimulateComponent.cpp.obj",
-			"GPUErodeComponent.cpp.obj"
+			"HydroErosionSimulateComponent.cpp.obj"
 		],
 		"Module.HydroErosionSimulate.gen.cpp.obj": [
-			"HydroErosionSimulateComponent.gen.cpp.obj",
 			"GPUErodeComponent.gen.cpp.obj",
-			"HydroErosionSimulate.init.gen.cpp.obj"
+			"HydroErosionSimulate.init.gen.cpp.obj",
+			"HydroErosionSimulateComponent.gen.cpp.obj"
 		]
 	}
 }

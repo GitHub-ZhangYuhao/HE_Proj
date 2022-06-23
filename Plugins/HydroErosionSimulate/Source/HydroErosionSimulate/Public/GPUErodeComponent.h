@@ -40,5 +40,5 @@ public:
 	void InvokeGPUInitData_RenderThread(UTextureRenderTarget2D* InRenderTarget);
 
 	UFUNCTION(BlueprintCallable , Category = "GPUHydroErosion")
-	void InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget);
+	void InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget ,UTextureRenderTarget2D* DebugRenderTarget);
 };

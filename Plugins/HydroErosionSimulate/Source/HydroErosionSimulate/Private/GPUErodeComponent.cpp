@@ -104,11 +104,12 @@ void UGPUErodeComponent::InvokeGPUInitData_RenderThread(UTextureRenderTarget2D* 
 	UE_LOG(LogTemp , Warning ,TEXT("Simulate Data Has Prepeared!!!"));
 }
 
-void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget)
+void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* InRenderTarget ,UTextureRenderTarget2D* DebugRenderTarget)
 {
 	check(IsInGameThread());
 	FTexture2DRHIRef In_RenderTargetRHI_Result = InRenderTarget->GameThread_GetRenderTargetResource()->GetRenderTargetTexture();
-
+	FTexture2DRHIRef Debug_RenderTargetRHI_Result = DebugRenderTarget->GameThread_GetRenderTargetResource()->GetRenderTargetTexture();
+	
 	if (bIsInit != true)
 	{
 		InvokeGPUInitData_RenderThread(InRenderTarget);
@@ -116,7 +117,7 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 		//拉起渲染线程
 	ENQUEUE_RENDER_COMMAND(HydroErosionSimulate)
 	(
-	[& ,this,In_RenderTargetRHI_Result, InRenderTarget](FRHICommandListImmediate &RHICmdList)
+	[& ,this,In_RenderTargetRHI_Result, InRenderTarget ,Debug_RenderTargetRHI_Result ,DebugRenderTarget](FRHICommandListImmediate &RHICmdList)
 	{
 		FRDGBuilder GraphBuilder(RHICmdList);
 
@@ -129,7 +130,12 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 		//Load Buffer,Init Texture
 		FRDGBufferRef Velocity_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_Velocity);
 		FRDGBufferRef Flux_Buffer = GraphBuilder.RegisterExternalBuffer(PooledBuffer_Flux);
+		FRDGBufferRef Flux_Buffer_1 = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(float)*4 ,BufferElement) , TEXT("Flux_Buffer_1") ,ERDGBufferFlags::MultiFrame);
 		FRDGTextureRef SimulateTex = GraphBuilder.CreateTexture(TextureDesc ,TEXT("SimulateTex"));
+		//For Swap Tex
+		FRDGTextureRef SimulateTex_1 = GraphBuilder.CreateTexture(TextureDesc ,TEXT("SimulateTex_1"));
+		FRDGTextureRef DebugTex = GraphBuilder.CreateTexture(TextureDesc ,TEXT("DebugTex"));
+		
 		
 		const ERHIFeatureLevel::Type FeatureLevel = GMaxRHIFeatureLevel;
 		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
@@ -154,10 +160,34 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 				ComputeShader,PassParameters,
 				FIntVector(GroupSize.X,GroupSize.Y,1));
 		}
+		//Flux Pass
+		// In : Tex(height ,water ,sediment ,hardness)
+		// Out: Flux
+		{
+			typedef FOutFluxComputeCS SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+						
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->SimulateTexR = In_RenderTargetRHI_Result;
+			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
+			PassParameters->FluxR = GraphBuilder.CreateSRV(Flux_Buffer);
+			PassParameters->FluxW = GraphBuilder.CreateUAV(Flux_Buffer_1);
+			PassParameters->DebugTex = GraphBuilder.CreateUAV(DebugTex);
+			
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("OutFlux_Pass"),
+				ComputeShader,PassParameters,
+				FIntVector(GroupSize.X,GroupSize.Y,1));
+		}
+		
 
 		//拷贝到RT
 		TRefCountPtr<IPooledRenderTarget> Pooled_SimulateTexture = nullptr;
 		GraphBuilder.QueueTextureExtraction(SimulateTex ,&Pooled_SimulateTexture);
+		//Debug
+		TRefCountPtr<IPooledRenderTarget> Pooled_DebugTexture = nullptr;
+		GraphBuilder.QueueTextureExtraction(DebugTex ,&Pooled_DebugTexture);
 
 		//转换外部存储
 		ConvertToExternalBuffer(GraphBuilder, Flux_Buffer, PooledBuffer_Flux);
@@ -167,6 +197,9 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 		
 		RHICmdList.CopyTexture(Pooled_SimulateTexture->GetRenderTargetItem().ShaderResourceTexture,In_RenderTargetRHI_Result->GetTexture2D(),FRHICopyTextureInfo());
 
+		//Debug
+		RHICmdList.CopyTexture(Pooled_DebugTexture->GetRenderTargetItem().ShaderResourceTexture ,Debug_RenderTargetRHI_Result->GetTexture2D(),FRHICopyTextureInfo());
+		
 		SimulationTimes++;
 		UE_LOG(LogTemp , Warning ,TEXT("Simulation Times : %i") , SimulationTimes);
 	});

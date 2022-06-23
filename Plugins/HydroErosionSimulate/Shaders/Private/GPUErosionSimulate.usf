@@ -60,6 +60,9 @@ RWStructuredBuffer<float4> FluxW;
 RWStructuredBuffer<float2> VelocityW;
 // Flux Field
 
+//DebugTexture
+RWTexture2D<float4> DebugTex;
+
 
 [numthreads(32,32,1)]
 void InitSimuData(uint3 id :SV_DispatchThreadID)
@@ -88,17 +91,17 @@ float4 SimulateTex( float2 UV ,float2 Offset = float2(0,0))
 	return SimulateTexR.SampleLevel(SimulateTexSampler, UV + Offset, 0);
 }
 
-#define HEIGHT(state) state.r
-#define WATER(state) state.g
-#define SEDIMENT(state) state.b
-#define HARDNESS(state) state.a
-#define FULL_HEIGHT(state) HEIGHT(state)+WATER(STATE)
+#define HEIGHT(state) (state.r)
+#define WATER(state) (state.g)
+#define SEDIMENT(state) (state.b)
+#define HARDNESS(state) (state.a)
+#define FULL_HEIGHT(state) (HEIGHT(state)+WATER(state))
 
-#define LDIR(OutFlux) OutFlux.r;
-#define RDIR(OutFlux) OutFlux.g;
-#define TDIR(OutFlux) OutFlux.b;
-#define BDIR(OutFlux) OutFlux.a;
-
+#define LDIR(OutFlux) (OutFlux.r)
+#define RDIR(OutFlux) (OutFlux.g)
+#define TDIR(OutFlux) (OutFlux.b)
+#define BDIR(OutFlux) (OutFlux.a)
+#define SUM_FLUX(F) (F.r + F.g + F.b + F.a)
 
 float3 RainData;
 [numthreads(32,32,1)]
@@ -128,8 +131,10 @@ const static float PipeLength = 1.0f/TexSize;
 const static float deltaTime = 0.01f;
 const static float Gravity = 9.81f;
 const static float PipeArea = 20.0f;
+const static float CellSize = 1.0f/TexSize;
+
 [numthreads(32,32,1)]
-void OutFlux(uint3 id:SV_DispatchThreadID)
+void OutFluxComputeCS(uint3 id:SV_DispatchThreadID)
 {
 	int index = Index(id.xy);
 	
@@ -145,16 +150,19 @@ void OutFlux(uint3 id:SV_DispatchThreadID)
 	
 	float4 Cur_OutFlux = FluxR[index];
 
-	float4 Full_Height_diff = float4(FULL_HEIGHT(State)) - float4(FULL_HEIGHT(L_State) ,
+	float4 Full_Height_diff = ((float4)FULL_HEIGHT(State)) - float4(FULL_HEIGHT(L_State) ,
 															 	  FULL_HEIGHT(R_State),
 																  FULL_HEIGHT(T_State),
 															 	  FULL_HEIGHT(B_State));
-	float OutFlux = max(0 , Cur_OutFlux + deltaTime * Gravity * PipeArea * Full_Height_diff / PipeLength);
+	float4 OutFlux = max(0 , Cur_OutFlux + deltaTime * Gravity * PipeArea * Full_Height_diff / PipeLength);
 
-	if (id.x == 0)  OutFlux.r = 0.0f;
-	if (id.y == 0)	OutFlux.a = 0;
-	if (id.x == TexSize - 1) OutFlux.g = 0;
-	if (id.y == TexSize - 1) OutFlux.b = 0;	
+	float K = min(1, Water_Height * CellSize*CellSize / (SUM_FLUX(OutFlux) * deltaTime)); 
+	
+	if (id.x == 0)  LDIR(OutFlux)=0.0f;
+	if (id.y == 0)	BDIR(OutFlux)=0.0f;
+	if (id.x == TexSize - 1) RDIR(OutFlux)=0.0f;
+	if (id.y == TexSize - 1) TDIR(OutFlux)=0.0f;	
 
-	/***** K *************/
+	FluxW[index] = max(0, K*OutFlux);
+	DebugTex[id.xy] =  frac(max(0 ,OutFlux));
 }

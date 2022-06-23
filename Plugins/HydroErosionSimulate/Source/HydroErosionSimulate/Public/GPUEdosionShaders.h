@@ -64,17 +64,18 @@ public:
 };
 IMPLEMENT_GLOBAL_SHADER(FUpdateWaterAndHeightCS, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "UpdateWaterAndHeightCS", SF_Compute);
 
-class FOutFlux:public FGlobalShader
+class FOutFluxComputeCS:public FGlobalShader
 {
 public:
-	DECLARE_GLOBAL_SHADER(FOutFlux)
-	SHADER_USE_PARAMETER_STRUCT(FOutFlux , FGlobalShader)
+	DECLARE_GLOBAL_SHADER(FOutFluxComputeCS)
+	SHADER_USE_PARAMETER_STRUCT(FOutFluxComputeCS , FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
 		SHADER_PARAMETER_TEXTURE(Texture2D , SimulateTexR)
 		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float4> , FluxW)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
 	END_SHADER_PARAMETER_STRUCT()
 	
 	static bool ShouldCompilePermutation(FGlobalShaderPermutationParameters const& Parameters)
@@ -86,4 +87,4 @@ public:
 		//OutEnvironment.SetDefine();
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FOutFlux, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "OutFlux", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FOutFluxComputeCS, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "OutFluxComputeCS", SF_Compute);

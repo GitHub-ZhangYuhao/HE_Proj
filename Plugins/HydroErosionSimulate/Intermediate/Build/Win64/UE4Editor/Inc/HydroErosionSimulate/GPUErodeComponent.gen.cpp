@@ -23,9 +23,10 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 	DEFINE_FUNCTION(UGPUErodeComponent::execInvokeGPUErosion_RenderThread)
 	{
 		P_GET_OBJECT(UTextureRenderTarget2D,Z_Param_InRenderTarget);
+		P_GET_OBJECT(UTextureRenderTarget2D,Z_Param_DebugRenderTarget);
 		P_FINISH;
 		P_NATIVE_BEGIN;
-		P_THIS->InvokeGPUErosion_RenderThread(Z_Param_InRenderTarget);
+		P_THIS->InvokeGPUErosion_RenderThread(Z_Param_InRenderTarget,Z_Param_DebugRenderTarget);
 		P_NATIVE_END;
 	}
 	DEFINE_FUNCTION(UGPUErodeComponent::execInvokeGPUInitData_RenderThread)
@@ -50,8 +51,10 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 		struct GPUErodeComponent_eventInvokeGPUErosion_RenderThread_Parms
 		{
 			UTextureRenderTarget2D* InRenderTarget;
+			UTextureRenderTarget2D* DebugRenderTarget;
 		};
 		static const UE4CodeGen_Private::FObjectPropertyParams NewProp_InRenderTarget;
+		static const UE4CodeGen_Private::FObjectPropertyParams NewProp_DebugRenderTarget;
 		static const UE4CodeGen_Private::FPropertyParamsBase* const PropPointers[];
 #if WITH_METADATA
 		static const UE4CodeGen_Private::FMetaDataPairParam Function_MetaDataParams[];
@@ -59,8 +62,10 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 		static const UE4CodeGen_Private::FFunctionParams FuncParams;
 	};
 	const UE4CodeGen_Private::FObjectPropertyParams Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread_Statics::NewProp_InRenderTarget = { "InRenderTarget", nullptr, (EPropertyFlags)0x0010000000000080, UE4CodeGen_Private::EPropertyGenFlags::Object, RF_Public|RF_Transient|RF_MarkAsNative, 1, STRUCT_OFFSET(GPUErodeComponent_eventInvokeGPUErosion_RenderThread_Parms, InRenderTarget), Z_Construct_UClass_UTextureRenderTarget2D_NoRegister, METADATA_PARAMS(nullptr, 0) };
+	const UE4CodeGen_Private::FObjectPropertyParams Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread_Statics::NewProp_DebugRenderTarget = { "DebugRenderTarget", nullptr, (EPropertyFlags)0x0010000000000080, UE4CodeGen_Private::EPropertyGenFlags::Object, RF_Public|RF_Transient|RF_MarkAsNative, 1, STRUCT_OFFSET(GPUErodeComponent_eventInvokeGPUErosion_RenderThread_Parms, DebugRenderTarget), Z_Construct_UClass_UTextureRenderTarget2D_NoRegister, METADATA_PARAMS(nullptr, 0) };
 	const UE4CodeGen_Private::FPropertyParamsBase* const Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread_Statics::PropPointers[] = {
 		(const UE4CodeGen_Private::FPropertyParamsBase*)&Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread_Statics::NewProp_InRenderTarget,
+		(const UE4CodeGen_Private::FPropertyParamsBase*)&Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread_Statics::NewProp_DebugRenderTarget,
 	};
 #if WITH_METADATA
 	const UE4CodeGen_Private::FMetaDataPairParam Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread_Statics::Function_MetaDataParams[] = {
@@ -135,7 +140,7 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 		(UObject* (*)())Z_Construct_UPackage__Script_HydroErosionSimulate,
 	};
 	const FClassFunctionLinkInfo Z_Construct_UClass_UGPUErodeComponent_Statics::FuncInfo[] = {
-		{ &Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread, "InvokeGPUErosion_RenderThread" }, // 1024067669
+		{ &Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUErosion_RenderThread, "InvokeGPUErosion_RenderThread" }, // 4136084397
 		{ &Z_Construct_UFunction_UGPUErodeComponent_InvokeGPUInitData_RenderThread, "InvokeGPUInitData_RenderThread" }, // 2535168111
 	};
 #if WITH_METADATA
@@ -185,7 +190,7 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 		}
 		return OuterClass;
 	}
-	IMPLEMENT_CLASS(UGPUErodeComponent, 4017464306);
+	IMPLEMENT_CLASS(UGPUErodeComponent, 142032571);
 	template<> HYDROEROSIONSIMULATE_API UClass* StaticClass<UGPUErodeComponent>()
 	{
 		return UGPUErodeComponent::StaticClass();
