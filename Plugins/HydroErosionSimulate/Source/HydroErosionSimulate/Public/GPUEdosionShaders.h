@@ -96,9 +96,11 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FVelocityComputeCS , FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
-		SHADER_PARAMETER_TEXTURE(Texture2D , SimulateTexR)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D , SimulateTexR)
 		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float2> ,VelocityW)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture<float4> ,SimulateTexW)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
 	END_SHADER_PARAMETER_STRUCT()
 	

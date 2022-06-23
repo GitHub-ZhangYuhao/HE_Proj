@@ -103,6 +103,13 @@ float4 SimulateTex( float2 UV ,float2 Offset = float2(0,0))
 #define BDIR(OutFlux) (OutFlux.a)
 #define SUM_FLUX(F) (F.r + F.g + F.b + F.a)
 
+#define SAMPLE_WITH_OFFSET(tex, x, y) ((tex[id.xy + uint2(x, y)]))
+#define LEFT_SAMPLE(tex) (SAMPLE_WITH_OFFSET(tex, -1, 0))
+#define RIGHT_SAMPLE(tex) (SAMPLE_WITH_OFFSET(tex, 1, 0))
+#define TOP_SAMPLE(tex) (SAMPLE_WITH_OFFSET(tex, 0, 1))
+#define BOTTOM_SAMPLE(tex) (SAMPLE_WITH_OFFSET(tex, 0, -1))
+
+
 float3 RainData;
 [numthreads(32,32,1)]
 void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
@@ -173,5 +180,29 @@ void OutFluxComputeCS(uint3 id:SV_DispatchThreadID)
 [numthreads(32,32,1)]
 void VelocityComputeCS(uint3 id:SV_DispatchThreadID)
 {
-	DebugTex[id.xy] = FluxR[Index(id.xy)];
+	int index = Index(id.xy);
+
+	float2 UV = GetUV(SimulateTexW ,id);
+	float4 State = SimulateTex(UV);
+	float4 Out_Flux = FluxR[index];
+	float4 In_Flux = float4(
+		RDIR(FluxR[Index(id.xy - L)]),
+		LDIR(FluxR[Index(id.xy - R)]),
+		BDIR(FluxR[Index(id.xy - T)]),
+		TDIR(FluxR[Index(id.xy - B)])
+		);
+
+	float WaterHeight_d1 = WATER(State);
+	float delta_V = SUM_FLUX(In_Flux) - SUM_FLUX(Out_Flux);
+
+	float WaterHeight_d2 = deltaTime * delta_V / (CellSize*CellSize);
+
+	SimulateTexW[id.xy] = float4(State.r, WaterHeight_d2 ,State.b,State.a);
+
+	float2 Velocity_Field = float2(
+		0.5 * (LDIR(In_Flux) - LDIR(Out_Flux) + RDIR(Out_Flux) -RDIR(In_Flux) ),
+		0.5 * (BDIR(In_Flux) - BDIR(Out_Flux) + TDIR(Out_Flux) -TDIR(In_Flux)) );
+
+	VelocityW[index] = Velocity_Field;
+	DebugTex[id.xy] = float4(Velocity_Field,0,1);
 }	

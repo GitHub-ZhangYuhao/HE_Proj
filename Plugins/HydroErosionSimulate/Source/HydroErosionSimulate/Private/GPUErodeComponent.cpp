@@ -188,9 +188,12 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
 								
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
-			PassParameters->SimulateTexR = In_RenderTargetRHI_Result;
+			PassParameters->SimulateTexR = SimulateTex;
 			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
 			PassParameters->FluxR = GraphBuilder.CreateSRV(Flux_Buffer_1);
+			PassParameters->VelocityW = GraphBuilder.CreateUAV(Velocity_Buffer);
+			
+			PassParameters->SimulateTexW = GraphBuilder.CreateUAV(SimulateTex_1);
 			PassParameters->DebugTex = GraphBuilder.CreateUAV(DebugTex);
 					
 			FComputeShaderUtils::AddPass(
