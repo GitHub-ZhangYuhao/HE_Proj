@@ -128,7 +128,7 @@ const static float2 T_Bias = T/TexSize;
 const static float2 B_Bias = B/TexSize;
 
 const static float PipeLength = 1.0f/TexSize;
-const static float deltaTime = 0.01f;
+const static float deltaTime = 0.015f;
 const static float Gravity = 9.81f;
 const static float PipeArea = 20.0f;
 const static float CellSize = 1.0f/TexSize;
@@ -156,19 +156,22 @@ void OutFluxComputeCS(uint3 id:SV_DispatchThreadID)
 															 	  FULL_HEIGHT(B_State));
 	float4 OutFlux = max(0 , Cur_OutFlux + deltaTime * Gravity * PipeArea * Full_Height_diff / PipeLength);
 
-	float K = min(1, Water_Height * CellSize*CellSize / (SUM_FLUX(OutFlux) * deltaTime)); 
+	float K =max(0.1 , min(1, (Water_Height * CellSize * CellSize) / (SUM_FLUX(OutFlux) )* deltaTime)  );
 	
 	if (id.x == 0)  LDIR(OutFlux)=0.0f;
 	if (id.y == 0)	BDIR(OutFlux)=0.0f;
 	if (id.x == TexSize - 1) RDIR(OutFlux)=0.0f;
-	if (id.y == TexSize - 1) TDIR(OutFlux)=0.0f;	
+	if (id.y == TexSize - 1) TDIR(OutFlux)=0.0f;
 
-	FluxW[index] = max(0, K*OutFlux);
-	DebugTex[id.xy] =  frac(max(0 ,OutFlux));
+	OutFlux *= K;
+
+	//FluxW[index] = max(0, K*OutFlux);
+	FluxW[index] = max(0 , OutFlux);
+	DebugTex[id.xy] = max(0 ,OutFlux);
 }
 
 [numthreads(32,32,1)]
 void VelocityComputeCS(uint3 id:SV_DispatchThreadID)
 {
-	//DebugTex[id.xy] = FluxR[Index(id.xy)];
+	DebugTex[id.xy] = FluxR[Index(id.xy)];
 }	
