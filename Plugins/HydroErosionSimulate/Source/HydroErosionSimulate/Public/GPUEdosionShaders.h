@@ -75,7 +75,7 @@ public:
 		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float4> , FluxW)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4> ,DebugTex)
 	END_SHADER_PARAMETER_STRUCT()
 	
 	static bool ShouldCompilePermutation(FGlobalShaderPermutationParameters const& Parameters)
@@ -101,7 +101,7 @@ public:
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float2> ,VelocityW)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture<float4> ,SimulateTexW)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4> ,DebugTex)
 	END_SHADER_PARAMETER_STRUCT()
 	
 	static bool ShouldCompilePermutation(FGlobalShaderPermutationParameters const& Parameters)
@@ -125,7 +125,6 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D , SimulateTexR)
 		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float2> ,VelocityW)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture<float4> ,SimulateTexW)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
 	END_SHADER_PARAMETER_STRUCT()
