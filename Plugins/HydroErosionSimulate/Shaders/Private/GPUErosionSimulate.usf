@@ -205,4 +205,10 @@ void VelocityComputeCS(uint3 id:SV_DispatchThreadID)
 
 	VelocityW[index] = Velocity_Field;
 	DebugTex[id.xy] = float4(Velocity_Field,0,1);
-}	
+}
+
+[numthreads(32,32,1)]
+void HydroErosionCS(uint3 id:SV_DispatchThreadID)
+{
+	
+}
