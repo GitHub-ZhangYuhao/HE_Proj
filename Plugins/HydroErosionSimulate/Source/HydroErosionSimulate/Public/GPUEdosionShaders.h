@@ -96,6 +96,7 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FVelocityComputeCS , FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
+		SHADER_PARAMETER(float ,WaterVelocitySwap)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D , SimulateTexR)
 		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)

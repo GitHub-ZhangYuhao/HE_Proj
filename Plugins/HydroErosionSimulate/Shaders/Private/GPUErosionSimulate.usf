@@ -4,7 +4,7 @@
 
 const static float TexSize = 1024;
 const static float Water_Brush_Radius = 0.0f;
-const static float Kr = 0.0125;		//Rain Factor
+const static float Kr = 0.00125;		//Rain Factor
 
 const static float2 L = float2(-1,0);
 const static float2 R = float2(1,0);
@@ -294,7 +294,26 @@ void SedimentAdvectionCS(uint3 id:SV_DispatchThreadID)
 	WATER(state) *= 1-Ke*deltaTime;
 	SEDIMENT(state) = SEDIMENT(SimulateTex( UV.xy , -velocity * deltaTime ));
 	WATER(state) = WATER(SimulateTex( UV.xy , -velocity * deltaTime ));
-	// Write heightmap
+	
+	float4 stateLeft = SimulateTex(UV, L_Bias);
+	float4 stateRight = SimulateTex(UV, R_Bias);
+	float4 stateTop = SimulateTex(UV, T_Bias);
+	float4 stateBottom = SimulateTex(UV, B_Bias);
+
+	// Tilt angle computation
+	float3 dhdx = float3(1, 0, 0) * (HEIGHT(stateRight) - HEIGHT(stateLeft));
+	float3 dhdy = float3(0, 0, 1) * (HEIGHT(stateTop) - HEIGHT(stateBottom));
+	float3 normal = cross(dhdx, dhdy);
+	float sinTiltAngle = abs(normal.y) / length(normal);
+
+	// Erosion limiting factor
+	float lmax = saturate(1 - max(0, MaxErosionDepth - WATER(state)) / MaxErosionDepth);
+	float sedimentTransportCapacity = SedimentCapacity * length(velocity) * min(sinTiltAngle, 0.05) * lmax;
+
+	HEIGHT(state) = lerp(HEIGHT(state) , ((HEIGHT(stateLeft) + HEIGHT(stateRight) + HEIGHT(stateTop) + HEIGHT(stateBottom) )/4) ,  WATER(state)*HARDNESS(state)*deltaTime); 
+
 	SimulateTexW[id.xy] = state;
+	// Write heightmap
+	//SimulateTexW[id.xy] = sedimentTransportCapacity;
 	//DebugTex[id.xy] = 0.0f;
 }

@@ -32,6 +32,9 @@ public:
 	//SimulateData
 	UPROPERTY(BlueprintReadWrite)
 	FVector RainData;
+
+	UPROPERTY(BlueprintReadWrite)
+	float WaterVelocitySwap = 1.0f;
 	
 	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_Flux;
 	TRefCountPtr<FRDGPooledBuffer> PooledBuffer_Velocity;

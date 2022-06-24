@@ -188,6 +188,7 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
 								
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->WaterVelocitySwap = WaterVelocitySwap;
 			PassParameters->SimulateTexR = SimulateTex;
 			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
 			PassParameters->FluxR = GraphBuilder.CreateSRV(Flux_Buffer_1);
@@ -226,14 +227,14 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 								
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
 			PassParameters->SimulateTexR = SimulateTex;
-			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
+			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Trilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
 			PassParameters->VelocityR = GraphBuilder.CreateSRV(Velocity_Buffer);
 			PassParameters->SimulateTexW = GraphBuilder.CreateUAV(SimulateTex_1);
 			PassParameters->DebugTex = GraphBuilder.CreateUAV(DebugTex);
 					
 			FComputeShaderUtils::AddPass(
 				GraphBuilder,
-				RDG_EVENT_NAME("HydroErode_Pass"),
+				RDG_EVENT_NAME("Sediment_Advect_Pass"),
 				ComputeShader,PassParameters,
 				FIntVector(GroupSize.X,GroupSize.Y,1));
 		}

@@ -131,6 +131,10 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 		static const UE4CodeGen_Private::FMetaDataPairParam NewProp_RainData_MetaData[];
 #endif
 		static const UE4CodeGen_Private::FStructPropertyParams NewProp_RainData;
+#if WITH_METADATA
+		static const UE4CodeGen_Private::FMetaDataPairParam NewProp_WaterVelocitySwap_MetaData[];
+#endif
+		static const UE4CodeGen_Private::FFloatPropertyParams NewProp_WaterVelocitySwap;
 		static const UE4CodeGen_Private::FPropertyParamsBase* const PropPointers[];
 		static const FCppClassTypeInfoStatic StaticCppClassTypeInfo;
 		static const UE4CodeGen_Private::FClassParams ClassParams;
@@ -160,8 +164,16 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 	};
 #endif
 	const UE4CodeGen_Private::FStructPropertyParams Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_RainData = { "RainData", nullptr, (EPropertyFlags)0x0010000000000004, UE4CodeGen_Private::EPropertyGenFlags::Struct, RF_Public|RF_Transient|RF_MarkAsNative, 1, STRUCT_OFFSET(UGPUErodeComponent, RainData), Z_Construct_UScriptStruct_FVector, METADATA_PARAMS(Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_RainData_MetaData, UE_ARRAY_COUNT(Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_RainData_MetaData)) };
+#if WITH_METADATA
+	const UE4CodeGen_Private::FMetaDataPairParam Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_WaterVelocitySwap_MetaData[] = {
+		{ "Category", "GPUErodeComponent" },
+		{ "ModuleRelativePath", "Public/GPUErodeComponent.h" },
+	};
+#endif
+	const UE4CodeGen_Private::FFloatPropertyParams Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_WaterVelocitySwap = { "WaterVelocitySwap", nullptr, (EPropertyFlags)0x0010000000000004, UE4CodeGen_Private::EPropertyGenFlags::Float, RF_Public|RF_Transient|RF_MarkAsNative, 1, STRUCT_OFFSET(UGPUErodeComponent, WaterVelocitySwap), METADATA_PARAMS(Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_WaterVelocitySwap_MetaData, UE_ARRAY_COUNT(Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_WaterVelocitySwap_MetaData)) };
 	const UE4CodeGen_Private::FPropertyParamsBase* const Z_Construct_UClass_UGPUErodeComponent_Statics::PropPointers[] = {
 		(const UE4CodeGen_Private::FPropertyParamsBase*)&Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_RainData,
+		(const UE4CodeGen_Private::FPropertyParamsBase*)&Z_Construct_UClass_UGPUErodeComponent_Statics::NewProp_WaterVelocitySwap,
 	};
 	const FCppClassTypeInfoStatic Z_Construct_UClass_UGPUErodeComponent_Statics::StaticCppClassTypeInfo = {
 		TCppClassTypeTraits<UGPUErodeComponent>::IsAbstract,
@@ -190,7 +202,7 @@ void EmptyLinkFunctionForGeneratedCodeGPUErodeComponent() {}
 		}
 		return OuterClass;
 	}
-	IMPLEMENT_CLASS(UGPUErodeComponent, 142032571);
+	IMPLEMENT_CLASS(UGPUErodeComponent, 3435582871);
 	template<> HYDROEROSIONSIMULATE_API UClass* StaticClass<UGPUErodeComponent>()
 	{
 		return UGPUErodeComponent::StaticClass();

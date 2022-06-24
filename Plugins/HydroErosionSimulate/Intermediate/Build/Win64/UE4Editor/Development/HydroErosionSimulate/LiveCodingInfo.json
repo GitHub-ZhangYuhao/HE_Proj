@@ -7,9 +7,9 @@
 			"GPUErodeComponent.cpp.obj"
 		],
 		"Module.HydroErosionSimulate.gen.cpp.obj": [
+			"HydroErosionSimulateComponent.gen.cpp.obj",
 			"GPUErodeComponent.gen.cpp.obj",
-			"HydroErosionSimulate.init.gen.cpp.obj",
-			"HydroErosionSimulateComponent.gen.cpp.obj"
+			"HydroErosionSimulate.init.gen.cpp.obj"
 		]
 	}
 }
