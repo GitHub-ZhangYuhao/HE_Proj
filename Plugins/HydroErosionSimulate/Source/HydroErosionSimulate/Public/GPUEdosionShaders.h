@@ -48,6 +48,7 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
 		SHADER_PARAMETER(FVector , RainData)
+		SHADER_PARAMETER(float ,HeightAmount)
 		SHADER_PARAMETER_TEXTURE(Texture2D , SimulateTexR)
 		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4> ,SimulateTexW)

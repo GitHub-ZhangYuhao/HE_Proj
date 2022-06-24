@@ -4,7 +4,9 @@
 
 const static float TexSize = 1024;
 const static float Water_Brush_Radius = 0.0f;
-const static float Kr = 0.00125;		//Rain Factor
+const static float Height_Brush_Radius = 0.0f;
+const static float Kr = 0.0025;		//Rain Factor
+const static float Kh = 0.0025;
 
 const static float2 L = float2(-1,0);
 const static float2 R = float2(1,0);
@@ -53,9 +55,12 @@ float Rain(float2 RainPos ,float2 UV ,float RainAmount)
 	float Ramp = 1-saturate((distance(RainPos , UV)*2) - Water_Brush_Radius);
 	return saturate(pow(Ramp , 32))* RainAmount * Kr ;
 }
-float HeightAdd()
+float HeightAdd(float2 RainPos ,float2 UV ,float HeightAmount)
 {
-	return 0.f;
+	//return 0.1f;
+	//RainPos = float2(0.5,0.5);
+	float Ramp = 1-saturate((distance(RainPos , UV)*2) - Height_Brush_Radius);
+	return saturate(pow(Ramp , 32))* HeightAmount * Kh ;
 }
 
 
@@ -136,6 +141,7 @@ float4 SimulateTex( float2 UV ,float2 Offset = float2(0,0))
 
 
 float3 RainData;
+float HeightAmount;
 [numthreads(32,32,1)]
 void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
 {
@@ -143,7 +149,7 @@ void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
 	
 	float2 UV = GetUV(SimulateTexW , id);
 	float4 state = SimulateTex(UV).rgba;
-	float HeightIncrease = HEIGHT(state) + HeightAdd();
+	float HeightIncrease = HEIGHT(state) + HeightAdd(RainData.xy , UV, HeightAmount);
 	float WaterIncrease = WATER(state) + Rain( RainData.xy , UV, RainData.z);
 	SimulateTexW[id.xy] = float4(HeightIncrease , WaterIncrease , state.z , state.w);
 	//SimulateTexW[id.xy] = state;
@@ -308,10 +314,17 @@ void SedimentAdvectionCS(uint3 id:SV_DispatchThreadID)
 
 	// Erosion limiting factor
 	float lmax = saturate(1 - max(0, MaxErosionDepth - WATER(state)) / MaxErosionDepth);
-	float sedimentTransportCapacity = SedimentCapacity * length(velocity) * min(sinTiltAngle, 0.05) * lmax;
+	float sedimentTransportCapacity = SedimentCapacity * length(velocity) * min(sinTiltAngle, 0.0) * lmax;
+	sedimentTransportCapacity = max(0.025 ,sedimentTransportCapacity);
 
-	HEIGHT(state) = lerp(HEIGHT(state) , ((HEIGHT(stateLeft) + HEIGHT(stateRight) + HEIGHT(stateTop) + HEIGHT(stateBottom) )/4) ,  WATER(state)*HARDNESS(state)*deltaTime); 
+	float selfWeight = 0.35;
+	float otherWeight = (1-selfWeight)/4;
+	float blurHeight = ((HEIGHT(stateLeft)*otherWeight + HEIGHT(stateRight)*otherWeight + HEIGHT(stateTop)*otherWeight + HEIGHT(stateBottom) + HEIGHT(state)*selfWeight)/5) ;
+	
+	// HEIGHT(state) = lerp(HEIGHT(state) , ((HEIGHT(stateLeft) + HEIGHT(stateRight) + HEIGHT(stateTop) + HEIGHT(stateBottom) )/4) ,  WATER(state)*HARDNESS(state)*deltaTime); 
 
+	HEIGHT(state) += (HEIGHT(stateLeft) + HEIGHT(stateRight) + HEIGHT(stateTop) + HEIGHT(stateBottom) - 4*HEIGHT(state) ) * WATER(state)*HARDNESS(state)*deltaTime *sedimentTransportCapacity;
+	
 	SimulateTexW[id.xy] = state;
 	// Write heightmap
 	//SimulateTexW[id.xy] = sedimentTransportCapacity;

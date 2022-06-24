@@ -149,6 +149,7 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
 			
 			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->HeightAmount = HeightAount;
 			PassParameters->RainData = RainData;
 			PassParameters->SimulateTexR = In_RenderTargetRHI_Result;
 			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();

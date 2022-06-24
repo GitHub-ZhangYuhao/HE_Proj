@@ -32,6 +32,8 @@ public:
 	//SimulateData
 	UPROPERTY(BlueprintReadWrite)
 	FVector RainData;
+	UPROPERTY(BlueprintReadWrite)
+	float HeightAount;
 
 	UPROPERTY(BlueprintReadWrite)
 	float WaterVelocitySwap = 1.0f;
