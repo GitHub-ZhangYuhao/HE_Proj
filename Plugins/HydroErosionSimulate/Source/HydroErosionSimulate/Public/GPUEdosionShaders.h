@@ -124,8 +124,8 @@ public:
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D , SimulateTexR)
 		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4> ,FluxR)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture<float4> ,SimulateTexW)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float2> ,VelocityR)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
 	END_SHADER_PARAMETER_STRUCT()
 	
@@ -139,3 +139,28 @@ public:
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FHydroErosionCS, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "HydroErosionCS", SF_Compute);
+
+class FSedimentAdvectionCS:public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FSedimentAdvectionCS)
+	SHADER_USE_PARAMETER_STRUCT(FSedimentAdvectionCS , FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters , )
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D , SimulateTexR)
+		SHADER_PARAMETER_SAMPLER(SamplerState , SimulateTexSampler)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture<float4> ,SimulateTexW)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float2> ,VelocityR)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWStructuredBuffer<float4> ,DebugTex)
+	END_SHADER_PARAMETER_STRUCT()
+	
+	static bool ShouldCompilePermutation(FGlobalShaderPermutationParameters const& Parameters)
+	{
+		return RHISupportsComputeShaders(Parameters.Platform);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		//OutEnvironment.SetDefine();
+	}
+};
+IMPLEMENT_GLOBAL_SHADER(FSedimentAdvectionCS, "/Plugins/HydroErosionSimulate/Shaders/Private/GPUErosionSimulate.usf" , "SedimentAdvectionCS", SF_Compute);

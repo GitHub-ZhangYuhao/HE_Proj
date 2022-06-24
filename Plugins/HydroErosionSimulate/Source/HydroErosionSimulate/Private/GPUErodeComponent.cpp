@@ -182,7 +182,7 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 		}
 		
 		
-
+		//Velocity Pass
 		{
 			typedef FVelocityComputeCS SHADER;
 			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
@@ -202,11 +202,45 @@ void UGPUErodeComponent::InvokeGPUErosion_RenderThread(UTextureRenderTarget2D* I
 				ComputeShader,PassParameters,
 				FIntVector(GroupSize.X,GroupSize.Y,1));
 		}
-		
+		//ErodSion Pass
+		{
+			typedef FHydroErosionCS SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+								
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->SimulateTexR = SimulateTex_1;
+			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
+			PassParameters->VelocityR = GraphBuilder.CreateSRV(Velocity_Buffer);
+			PassParameters->SimulateTexW = GraphBuilder.CreateUAV(SimulateTex);
+			PassParameters->DebugTex = GraphBuilder.CreateUAV(DebugTex);
+					
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("HydroErode_Pass"),
+				ComputeShader,PassParameters,
+				FIntVector(GroupSize.X,GroupSize.Y,1));
+		}
+		{
+			typedef FSedimentAdvectionCS SHADER;
+			TShaderMapRef<SHADER> ComputeShader(GlobalShaderMap);
+								
+			SHADER::FParameters* PassParameters = GraphBuilder.AllocParameters<SHADER::FParameters>();
+			PassParameters->SimulateTexR = SimulateTex;
+			PassParameters->SimulateTexSampler = TStaticSamplerState<SF_Bilinear ,AM_Clamp ,AM_Clamp ,AM_Clamp ,0>::GetRHI();
+			PassParameters->VelocityR = GraphBuilder.CreateSRV(Velocity_Buffer);
+			PassParameters->SimulateTexW = GraphBuilder.CreateUAV(SimulateTex_1);
+			PassParameters->DebugTex = GraphBuilder.CreateUAV(DebugTex);
+					
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("HydroErode_Pass"),
+				ComputeShader,PassParameters,
+				FIntVector(GroupSize.X,GroupSize.Y,1));
+		}
 
 		//拷贝到RT
 		TRefCountPtr<IPooledRenderTarget> Pooled_SimulateTexture = nullptr;
-		GraphBuilder.QueueTextureExtraction(SimulateTex ,&Pooled_SimulateTexture);
+		GraphBuilder.QueueTextureExtraction(SimulateTex_1 ,&Pooled_SimulateTexture);
 		//Debug
 		TRefCountPtr<IPooledRenderTarget> Pooled_DebugTexture = nullptr;
 		GraphBuilder.QueueTextureExtraction(DebugTex ,&Pooled_DebugTexture);

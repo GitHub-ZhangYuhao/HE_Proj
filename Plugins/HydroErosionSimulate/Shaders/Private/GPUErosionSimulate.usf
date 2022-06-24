@@ -3,10 +3,30 @@
 
 
 const static float TexSize = 1024;
-const static float Water_Brush_Radius = 0.025f;
-const static float Kr = 0.25;		//Rain Factor
+const static float Water_Brush_Radius = 0.0f;
+const static float Kr = 0.0125;		//Rain Factor
 
+const static float2 L = float2(-1,0);
+const static float2 R = float2(1,0);
+const static float2 T = float2(0,1);
+const static float2 B = float2(0,-1);
+	
+const static float2 L_Bias = L/TexSize;
+const static float2 R_Bias = R/TexSize;
+const static float2 T_Bias = T/TexSize;
+const static float2 B_Bias = B/TexSize;
 
+const static float PipeLength = 1.0f/TexSize;
+const static float deltaTime = 0.015f;
+const static float Gravity = 9.81f;
+const static float PipeArea = 20.0f;
+const static float CellSize = 1.0f/TexSize;
+const static float MaxErosionDepth = 5.f;
+const static float SedimentCapacity = 1.0f;
+const static float Ks = 0.5;
+const static float Kd = 1.0;
+const static float Ke = 0.05f;
+const static float SedimentSofteningRate = 1.f;
 
 int Index(uint3 id){
 	return id.x + id.y * TexSize;
@@ -31,7 +51,7 @@ float Rain(float2 RainPos ,float2 UV ,float RainAmount)
 	//return 0.1f;
 	//RainPos = float2(0.5,0.5);
 	float Ramp = 1-saturate((distance(RainPos , UV)*2) - Water_Brush_Radius);
-	return saturate(pow(Ramp , 64))* RainAmount * Kr;
+	return saturate(pow(Ramp , 32))* RainAmount * Kr ;
 }
 float HeightAdd()
 {
@@ -49,6 +69,8 @@ SamplerState InHeightMapTexSampler;
 //B : T
 //A : B
 StructuredBuffer<float4> FluxR;
+//VlocityField
+StructuredBuffer<float2> VelocityR;
 // R : height
 // G : water height
 // B : suspended sediment amount
@@ -64,14 +86,15 @@ RWStructuredBuffer<float2> VelocityW;
 RWTexture2D<float4> DebugTex;
 
 
+
 [numthreads(32,32,1)]
 void InitSimuData(uint3 id :SV_DispatchThreadID)
 {
 	int index = Index(id);
 
-	float Init_RainInit_Rain = 0.05;
+	float Init_RainInit_Rain = 0.0;
 	float Init_Sediment = 0;
-	float Init_Hardness = 0;
+	float Init_Hardness = 0.;
 	float2 UV = id.xy / TexSize; 
 	SimulateTexW[id.xy] =float4(InHeightMapTex.SampleLevel(InHeightMapTexSampler ,UV, 0).r,
 										Init_RainInit_Rain,
@@ -103,7 +126,9 @@ float4 SimulateTex( float2 UV ,float2 Offset = float2(0,0))
 #define BDIR(OutFlux) (OutFlux.a)
 #define SUM_FLUX(F) (F.r + F.g + F.b + F.a)
 
-#define SAMPLE_WITH_OFFSET(tex, x, y) ((tex[id.xy + uint2(x, y)]))
+// Sampling macro, just to simplify the code a bit
+#define SAMPLE_WITH_OFFSET(tex, x, y) (( tex[Index(id.xy + uint2(x,y))] ))
+
 #define LEFT_SAMPLE(tex) (SAMPLE_WITH_OFFSET(tex, -1, 0))
 #define RIGHT_SAMPLE(tex) (SAMPLE_WITH_OFFSET(tex, 1, 0))
 #define TOP_SAMPLE(tex) (SAMPLE_WITH_OFFSET(tex, 0, 1))
@@ -124,21 +149,8 @@ void UpdateWaterAndHeightCS(uint3 id :SV_DispatchThreadID)
 	//SimulateTexW[id.xy] = state;
 }
 
-const static float2 L = float2(-1,0);
-const static float2 R = float2(1,0);
-const static float2 T = float2(0,1);
-const static float2 B = float2(0,-1);
-	
-const static float2 L_Bias = L/TexSize;
-const static float2 R_Bias = R/TexSize;
-const static float2 T_Bias = T/TexSize;
-const static float2 B_Bias = B/TexSize;
 
-const static float PipeLength = 1.0f/TexSize;
-const static float deltaTime = 0.015f;
-const static float Gravity = 9.81f;
-const static float PipeArea = 20.0f;
-const static float CellSize = 1.0f/TexSize;
+
 
 [numthreads(32,32,1)]
 void OutFluxComputeCS(uint3 id:SV_DispatchThreadID)
@@ -164,6 +176,7 @@ void OutFluxComputeCS(uint3 id:SV_DispatchThreadID)
 	float4 OutFlux = max(0 , Cur_OutFlux + deltaTime * Gravity * PipeArea * Full_Height_diff / PipeLength);
 
 	float K =max(0.1 , min(1, (Water_Height * CellSize * CellSize) / (SUM_FLUX(OutFlux) )* deltaTime)  );
+	//K = 1;
 	
 	if (id.x == 0)  LDIR(OutFlux)=0.0f;
 	if (id.y == 0)	BDIR(OutFlux)=0.0f;
@@ -181,34 +194,107 @@ void OutFluxComputeCS(uint3 id:SV_DispatchThreadID)
 void VelocityComputeCS(uint3 id:SV_DispatchThreadID)
 {
 	int index = Index(id.xy);
-
 	float2 UV = GetUV(SimulateTexW ,id);
-	float4 State = SimulateTex(UV);
-	float4 Out_Flux = FluxR[index];
-	float4 In_Flux = float4(
-		RDIR(FluxR[Index(id.xy - L)]),
-		LDIR(FluxR[Index(id.xy - R)]),
-		BDIR(FluxR[Index(id.xy - T)]),
-		TDIR(FluxR[Index(id.xy - B)])
-		);
+	float4 state = SimulateTex(UV);
+	float4 outputFlux = FluxR[index];
+	float4 inputFlux = float4(
+		RDIR(LEFT_SAMPLE(FluxR)),
+		LDIR(RIGHT_SAMPLE(FluxR)),
+		BDIR(TOP_SAMPLE(FluxR)),
+		TDIR(BOTTOM_SAMPLE(FluxR)));
+	float waterHeightBefore = WATER(state);
+	float volumeDelta = SUM_FLUX(inputFlux) - SUM_FLUX(outputFlux) * deltaTime;
 
-	float WaterHeight_d1 = WATER(State);
-	float delta_V = SUM_FLUX(In_Flux) - SUM_FLUX(Out_Flux);
+	WATER(state) +=   volumeDelta / (TexSize*TexSize)  ;	//这里考虑要不要乘以 WATER(state)
 
-	float WaterHeight_d2 = deltaTime * delta_V / (CellSize*CellSize);
+	SimulateTexW[id.xy] = saturate( state );
 
-	SimulateTexW[id.xy] = float4(State.r, WaterHeight_d2 ,State.b,State.a);
+	float2 Velocity_Out = float2(
+	0.5 * (LDIR(inputFlux) - LDIR(outputFlux) + RDIR(outputFlux) - RDIR(inputFlux)),
+	0.5 * (BDIR(inputFlux) - BDIR(outputFlux) + TDIR(outputFlux) - TDIR(inputFlux))) *  0.5 * (waterHeightBefore + WATER(state))  ;
+	VelocityW[index] = Velocity_Out;
+	//DebugTex[id.xy] = float4(Velocity_Field,0,1);
 
-	float2 Velocity_Field = float2(
-		0.5 * (LDIR(In_Flux) - LDIR(Out_Flux) + RDIR(Out_Flux) -RDIR(In_Flux) ),
-		0.5 * (BDIR(In_Flux) - BDIR(Out_Flux) + TDIR(Out_Flux) -TDIR(In_Flux)) );
-
-	VelocityW[index] = Velocity_Field;
-	DebugTex[id.xy] = float4(Velocity_Field,0,1);
+	//Debug
+	DebugTex[id.xy] = float4(Velocity_Out,0,1);
+	
 }
 
 [numthreads(32,32,1)]
 void HydroErosionCS(uint3 id:SV_DispatchThreadID)
 {
+	// /*Debug*/
+	// int index = Index(id.xy);
+	// float2 UV = GetUV(SimulateTexW,id);
+	// float4 State = SimulateTex(UV);
+	// SimulateTexW[id.xy] = State;
 	
+	int index = Index(id.xy);
+	
+	float2 UV = GetUV(SimulateTexW,id);
+	
+	float4 state = SimulateTex(UV);
+	float4 stateLeft = SimulateTex(UV, L_Bias);
+	float4 stateRight = SimulateTex(UV, R_Bias);
+	float4 stateTop = SimulateTex(UV, T_Bias);
+	float4 stateBottom = SimulateTex(UV, B_Bias);
+	float2 velocity = VelocityR[index];
+
+	// Tilt angle computation
+	float3 dhdx = float3(1, 0, 0) * (HEIGHT(stateRight) - HEIGHT(stateLeft));
+	float3 dhdy = float3(0, 0, 1) * (HEIGHT(stateTop) - HEIGHT(stateBottom));
+	float3 normal = cross(dhdx, dhdy);
+
+	float sinTiltAngle = abs(normal.y) / length(normal);
+
+	// Erosion limiting factor
+	float lmax = saturate(1 - max(0, MaxErosionDepth - WATER(state)) / MaxErosionDepth);
+	float sedimentTransportCapacity = SedimentCapacity * length(velocity) * min(sinTiltAngle, 0.05) * lmax;
+
+	float New_Height;
+	float New_Sediment;
+	float New_NewWater;
+	if(SEDIMENT(state) < sedimentTransportCapacity)
+	{
+		float mod = deltaTime * Ks * HARDNESS(state)* (sedimentTransportCapacity - SEDIMENT(state));	
+		New_Height = HEIGHT(state) - mod;
+		New_Sediment = SEDIMENT(state) + mod;
+		New_NewWater = WATER(state) + mod;
+	}
+	else
+	{
+		float mod = deltaTime * Kd * (SEDIMENT(state) - sedimentTransportCapacity);
+		New_Height = HEIGHT(state) + mod;
+		New_Sediment = SEDIMENT(state) - mod;
+		New_NewWater = WATER(state) - mod;
+	}
+	New_NewWater *= 1- Ke*deltaTime ;
+
+	float New_Hardness = HARDNESS(state) - deltaTime * SedimentSofteningRate * Ks * (SEDIMENT(state) - sedimentTransportCapacity);
+	New_Hardness = clamp(New_Hardness , 0.1 , 1.0);
+	float4 OutResult = float4(New_Height , New_NewWater , New_Sediment ,New_Hardness);
+
+	SimulateTexW[id.xy] = OutResult;
+	//DebugTex[id.xy] = sinTiltAngle;
+
+	//Debug
+	//New_NewWater = WATER(State);
+	//DebugTex[id.xy] = SimulateTex(UV);
+}
+
+[numthreads(32,32,1)]
+void SedimentAdvectionCS(uint3 id:SV_DispatchThreadID)
+{
+	int index = Index(id.xy);
+	float2 UV = GetUV(SimulateTexW ,id);
+	float4 state = SimulateTex(UV);
+	float2 velocity = VelocityR[index]; 
+
+	// Sediment advection
+	WATER(state) *= 1-Ke*deltaTime;
+	SEDIMENT(state) = SEDIMENT(SimulateTex( UV.xy , -velocity * deltaTime ));
+	WATER(state) = WATER(SimulateTex( UV.xy , -velocity * deltaTime ));
+	// Write heightmap
+	SimulateTexW[id.xy] = state;
+	//DebugTex[id.xy] = 0.0f;
 }

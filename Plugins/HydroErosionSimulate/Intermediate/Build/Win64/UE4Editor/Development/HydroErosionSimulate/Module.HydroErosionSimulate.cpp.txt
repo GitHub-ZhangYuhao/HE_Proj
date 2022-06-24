@@ -1,4 +1,12 @@
 D:\UE_Proj\HE_Proj\Plugins\HydroErosionSimulate\Intermediate\Build\Win64\UE4Editor\Development\HydroErosionSimulate\Definitions.HydroErosionSimulate.h
+D:/UE_Proj/HE_Proj/Plugins/HydroErosionSimulate/Source/HydroErosionSimulate/Private/HydroErosionSimulate.cpp
+D:\UE_Proj\HE_Proj\Plugins\HydroErosionSimulate\Source\HydroErosionSimulate\Public\HydroErosionSimulate.h
+D:\UE4.26_SourceCode\UnrealEngine-4.26\Engine\Source\Runtime\Projects\Public\Interfaces/IPluginManager.h
+D:\UE4.26_SourceCode\UnrealEngine-4.26\Engine\Source\Runtime\Projects\Public\PluginDescriptor.h
+D:\UE4.26_SourceCode\UnrealEngine-4.26\Engine\Source\Runtime\Projects\Public\ModuleDescriptor.h
+D:\UE4.26_SourceCode\UnrealEngine-4.26\Engine\Source\Runtime\Projects\Public\CustomBuildSteps.h
+D:\UE4.26_SourceCode\UnrealEngine-4.26\Engine\Source\Runtime\Projects\Public\LocalizationDescriptor.h
+D:\UE4.26_SourceCode\UnrealEngine-4.26\Engine\Source\Runtime\Projects\Public\PluginReferenceDescriptor.h
 D:/UE_Proj/HE_Proj/Plugins/HydroErosionSimulate/Source/HydroErosionSimulate/Private/HydroErosionSimulateComponent.cpp
 D:\UE_Proj\HE_Proj\Plugins\HydroErosionSimulate\Source\HydroErosionSimulate\Public\HydroErosionSimulateComponent.h
 D:\UE4.26_SourceCode\UnrealEngine-4.26\Engine\Source\Runtime\RenderCore\Public\RenderGraphResources.h
